@@ -1,5 +1,6 @@
 import {attachmentToday,attachmentStem,uniqueAttachmentName} from './attachment-names.mjs?v=3aed45752cdb';
 import {lock,unlock,open,plain,b64,unb64} from './crypto.mjs?v=c7db6486b392';
+import {MODEL} from './dual-drive.mjs?v=ef760dc7519d';
 const fail=m=>{throw new Error(m);},clone=x=>structuredClone(x),MAX=200*1024*1024;
 function summary(db,createdAt,files=[]){return {organizationName:db.name,createdAt,cars:db.cars.length,transactions:db.transactions.length,users:db.users.filter(u=>!u.deletedAt).length,attachments:[...db.cars,...db.transactions].reduce((n,r)=>n+(r.attachments||[]).length,0),complete:files.length>0};}
 function ids(service,db){return [...new Set([service.account.rootId,service.profileId,...db.users.filter(u=>!u.deletedAt).flatMap(u=>[u.profileId,u.journalId,u.viewId])].filter(Boolean))];}
@@ -39,7 +40,7 @@ export async function restoreBackup(s,args){
  for(const key of ['cars','transactions','handovers'])for(const r of restored[key]||[])r.version=Math.max(r.version||0,current.value[key]?.find(x=>x.id===r.id)?.version||0)+1;
  const plans=[];
  // Validate every destination and retain its preimage before changing any file.
- for(const f of files.filter(f=>f.binary===undefined)){const drive=s.drive.driver(f.source),info=await drive.fileInfo(f.id),meta=await drive.meta(f.id),owner=f.source==='admin'?s.drive.primaryEmail:s.drive.secondaryEmail;if(info.appProperties?.model!=='two-google-v2'||info.appProperties.orgId&&info.appProperties.orgId!==restored.id||!meta.owners?.some(o=>o.emailAddress?.toLowerCase()===owner))fail('File phục hồi không thuộc đúng tổ chức/Google.');if(f.id===s.account.rootId&&meta.etag!==current.etag)fail('Dữ liệu vừa thay đổi. Kiểm tra lại trước khi phục hồi.');const before=(await drive.read(f.id)).box;plans.push({f,drive,meta,before,info});}
+ for(const f of files.filter(f=>f.binary===undefined)){const drive=s.drive.driver(f.source),info=await drive.fileInfo(f.id),meta=await drive.meta(f.id),owner=f.source==='admin'?s.drive.primaryEmail:s.drive.secondaryEmail;if(info.appProperties?.model!==MODEL||info.appProperties.orgId&&info.appProperties.orgId!==restored.id||!meta.owners?.some(o=>o.emailAddress?.toLowerCase()===owner))fail('File phục hồi không thuộc đúng tổ chức/Google.');if(f.id===s.account.rootId&&meta.etag!==current.etag)fail('Dữ liệu vừa thay đổi. Kiểm tra lại trước khi phục hồi.');const before=(await drive.read(f.id)).box;plans.push({f,drive,meta,before,info});}
  const uploaded=[],map=new Map();const relink=value=>{if(!value||typeof value!=='object')return;for(const [k,v] of Object.entries(value)){if(k==='driveFileId'&&map.has(v))Object.assign(value,map.get(v));else relink(v);}};
  const applied=[];let rootSaved=false;
  try{

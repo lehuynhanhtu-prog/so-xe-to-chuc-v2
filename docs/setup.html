@@ -1,1 +1,20 @@
-<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hướng dẫn Sổ Xe Tổ Chức 4.8.3</title><style>body{font:16px/1.65 system-ui;max-width:820px;margin:28px auto;padding:0 18px;color:#142b43}a{color:#176a65}aside{padding:14px 16px;background:#eef8f6;border-radius:12px}h2{margin-top:30px}code{background:#f1f4f7;padding:2px 5px;border-radius:4px}</style><body><h1>Sổ Xe Tổ Chức 4.8.3</h1><p><a href="./">Mở ứng dụng</a> · <a href="downloads.html">Tải ứng dụng</a></p><aside>Mỗi tổ chức dùng hai tài khoản Google khác nhau: một tài khoản lưu dữ liệu Admin và một tài khoản lưu dữ liệu NSD.</aside><h2>Thiết lập Google</h2><ol><li>Bật <strong>Google Drive API</strong> và <strong>Google Picker API</strong> trong Google Cloud.</li><li>OAuth Web Client: thêm origin <code>https://lehuynhanhtu-prog.github.io</code>.</li><li>API key: giới hạn website <code>https://lehuynhanhtu-prog.github.io/*</code> và Google Picker API.</li><li>Nếu OAuth ở chế độ Testing, thêm email Admin và NSD vào Test users.</li><li>APK Android cần OAuth Client loại Android, package <code>vn.soxe.organization</code> và SHA-1 trong <a href="android-google.html">hướng dẫn Android</a>.</li></ol><h2>Quyền tài khoản</h2><ul><li><strong>Admin / Admin bổ sung:</strong> toàn quyền xem, sửa, xóa, phân công và bàn giao.</li><li><strong>Admin xem:</strong> xem và xuất dữ liệu; không sửa, xóa, phân công hoặc bàn giao.</li><li><strong>NSD:</strong> chỉ xem lịch sử giao dịch do chính mình nhập. Chỉ khi đang quản lý xe, NSD mới được nhận cảnh báo và thêm/sửa/xóa giao dịch của mình hoặc bàn giao xe. Sau bàn giao, các quyền này tự khóa; phân công lại sẽ tự khôi phục.</li></ul><h2>Đăng nhập và dữ liệu</h2><p>Admin kết nối Google lưu dữ liệu Admin rồi Google lưu dữ liệu NSD; hai tài khoản phải khác nhau. NSD kết nối đúng Google lưu dữ liệu NSD, sau đó đăng nhập bằng tên và mật khẩu riêng; lần đầu phải đổi mật khẩu. Dữ liệu được mã hóa trước khi lưu trên Drive; ứng dụng không lưu mật khẩu Google.</p><p><a href="privacy.html">Quyền riêng tư</a> · <a href="terms.html">Điều khoản</a></p></body></html>
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hướng dẫn Web · Sổ Xe Tổ Chức v2</title>
+<style>body{font:16px/1.65 system-ui;max-width:820px;margin:28px auto;padding:0 18px;color:#142b43}a{color:#176a65}aside{padding:14px 16px;background:#fff8e9;border-radius:12px}h2{margin-top:30px}code{background:#f1f4f7;padding:2px 5px;border-radius:4px}</style>
+<body><main>
+  <h1>Sổ Xe Tổ Chức v2 · Web</h1>
+  <p><a href="./">Mở ứng dụng</a> · <a href="downloads.html">Các nền tảng</a></p>
+  <aside><strong>Bản Web đầu tiên:</strong> dữ liệu dùng namespace và thư mục V2 riêng, không tự đọc dữ liệu ứng dụng cũ. Kiến trúc đăng nhập không cần Google cho NSD sẽ được hoàn thiện ở bước backend Apps Script tiếp theo.</aside>
+  <h2>Phạm vi hiện tại</h2>
+  <ul>
+    <li>Giao diện Web kế thừa bản 4.8.3.</li>
+    <li>Đường dẫn GitHub Pages và nhận diện V2 riêng.</li>
+    <li>File và thư mục Drive mới mang định danh <code>organization-v2</code>.</li>
+    <li>Không chuyển tài khoản, xe hoặc giao dịch từ bản cũ.</li>
+  </ul>
+  <h2>Lưu ý kiểm thử</h2>
+  <p>Chỉ nhập dữ liệu thử trong giai đoạn này. Chưa coi đây là bản nghiệm thu cuối cùng cho đến khi API Apps Script, phân quyền backend và đăng nhập tài khoản ứng dụng được hoàn tất.</p>
+</main></body></html>

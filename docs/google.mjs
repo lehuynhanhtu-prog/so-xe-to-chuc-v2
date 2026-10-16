@@ -1,5 +1,5 @@
-import {Drive} from './drive.mjs?v=a3e2ebbd4509';
-import {Gmail} from './gmail.mjs?v=d9ccf993c0eb';
+import {Drive} from './drive.mjs?v=bcff36253489';
+import {Gmail} from './gmail.mjs?v=8f91fcaad3d9';
 const scope='openid email profile https://www.googleapis.com/auth/drive.file';
 function script(src){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error('Không tải được dịch vụ Google. Kiểm tra mạng.'));document.head.append(s);});}
 export class GoogleConnection{

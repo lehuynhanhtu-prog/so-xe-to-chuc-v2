@@ -1,5 +1,5 @@
 import {attachmentStem,uniqueAttachmentName} from './attachment-names.mjs';
-export const MODEL='two-google-v2';
+export const MODEL='organization-v2';
 const fail=m=>{throw new Error(m);};
 // Tokens stay on the two GoogleConnection instances, never in a file or localStorage.
 export class DualDrive{

@@ -8,7 +8,7 @@
 <main id="app" hidden><header class="row spread"><div><small id="identity"></small><h1 id="orgName"></h1></div><div class="row"><button class="secondary" id="reload">Đồng bộ</button><button class="secondary" id="googleReconnect">Kết nối Google</button><button class="secondary" id="passwordButton">Đổi mật khẩu</button><button class="secondary" id="logout">Đăng xuất</button></div></header><div id="status" role="status"></div><nav id="nav"></nav><section id="content"></section></main>
 <footer>Phiên bản 3.1 (bản cũ) · Drive API trực tiếp · <a href="setup.html">Hướng dẫn</a></footer></div>
 <dialog id="modal"><form id="modalForm"><h2 id="modalTitle"></h2><div id="modalBody"></div><div id="modalError" class="error" hidden role="alert"></div><div class="actions"><button id="modalSubmit" type="submit">Lưu</button><button class="secondary" type="button" id="closeModal">Đóng</button></div></form></dialog><script src="google-config.js?v=5d69aba05176"></script><script type="module">
-import {GoogleConnection} from './google.mjs?v=cd2db8badb86';
+import {GoogleConnection} from './google.mjs?v=77687561dd39';
 import {Service} from './service.mjs?v=551b02e6e0ac';
 let connection,service,poll,operationId, state=null,tab='overview',modalHandler=null,files=[],mailInvites=[];
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

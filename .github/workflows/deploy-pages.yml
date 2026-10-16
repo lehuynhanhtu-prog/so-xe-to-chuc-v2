@@ -1,4 +1,4 @@
-name: Deploy Sổ Xe Tổ Chức Web
+name: Deploy Sổ Xe Tổ Chức v2 Web
 
 on:
   push:

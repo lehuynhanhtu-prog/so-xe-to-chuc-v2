@@ -32,13 +32,13 @@ console.log('Native engine: shared module bundle, role-scoped reports, large amo
 // An additional Admin typed on a previously NSD-only device must connect primary,
 // rather than failing silently or accepting a partial storage configuration.
 const {lock,plain,randomKey}=await import('../web/crypto.mjs');
-const adminAccount={model:'two-google-v2',orgId:crypto.randomUUID(),userId:crypto.randomUUID(),username:'admin2',email:'admin2@users.invalid',role:'admin',ownerEmail:'admin@gmail.com',secondaryEmail:'storage@gmail.com',rootId:'root',rootKey:randomKey(),mustChange:true};
+const adminAccount={model:'organization-v2',orgId:crypto.randomUUID(),userId:crypto.randomUUID(),username:'admin2',email:'admin2@users.invalid',role:'admin',ownerEmail:'admin@gmail.com',secondaryEmail:'storage@gmail.com',rootId:'root',rootKey:randomKey(),mustChange:true};
 const encrypted=await lock(adminAccount,'000000','account',100000);
 globalThis.fetch=async(url,options={})=>{
  let body;
  if(url.includes('/drive/v2/files/profile'))body={etag:'1',owners:[{emailAddress:'storage@gmail.com'}],labels:{trashed:false}};
  else if(url.includes('/drive/v3/files/profile?alt=media'))body=encrypted;
- else body={files:options.headers.Authorization==='Bearer s'?[{id:'profile',appProperties:{model:'two-google-v2',username:'admin2',orgId:adminAccount.orgId}}]:[]};
+ else body={files:options.headers.Authorization==='Bearer s'?[{id:'profile',appProperties:{model:'organization-v2',username:'admin2',orgId:adminAccount.orgId}}]:[]};
  return new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
 };
 await native.dispatch('configure',{secondaryEmail:'storage@gmail.com',secondaryToken:'s'});
@@ -51,12 +51,12 @@ console.log('Native additional Admin connection handoff passed.');
 // A configured APK must complete an additional Admin login across both Drives,
 // including the journal on member storage and organization data on Admin storage.
 const fullRootKey=randomKey(),fullMemberKey=randomKey(),fullOrg=crypto.randomUUID(),fullUser=crypto.randomUUID();
-const fullAccount={model:'two-google-v2',orgId:fullOrg,userId:fullUser,username:'admin2',email:'admin2@users.invalid',role:'admin',ownerEmail:'admin@gmail.com',secondaryEmail:'storage@gmail.com',rootId:'root',rootKey:fullRootKey,journalId:'journal',memberKey:fullMemberKey,mustChange:false,passwordEpoch:'epoch'};
-const fullProfile=await lock(fullAccount,'admin-secret','account',10000),fullData={format:'soxe-org-v3',id:fullOrg,name:'Native Admin Org',ownerEmail:'admin@gmail.com',revision:1,updatedAt:new Date().toISOString(),storage:{model:'two-google-v2',secondaryEmail:'storage@gmail.com'},users:[{id:fullUser,username:'admin2',name:'Admin 2',email:'admin2@users.invalid',role:'admin',active:true,passwordEpoch:'epoch',journalId:'journal',memberKey:fullMemberKey}],cars:[],assignments:[],assignmentEvents:[],handovers:[],transactions:[],receipts:{},tombstones:[],audit:[],operations:[]};
+const fullAccount={model:'organization-v2',orgId:fullOrg,userId:fullUser,username:'admin2',email:'admin2@users.invalid',role:'admin',ownerEmail:'admin@gmail.com',secondaryEmail:'storage@gmail.com',rootId:'root',rootKey:fullRootKey,journalId:'journal',memberKey:fullMemberKey,mustChange:false,passwordEpoch:'epoch'};
+const fullProfile=await lock(fullAccount,'admin-secret','account',10000),fullData={format:'soxe-org-v3',id:fullOrg,name:'Native Admin Org',ownerEmail:'admin@gmail.com',revision:1,updatedAt:new Date().toISOString(),storage:{model:'organization-v2',secondaryEmail:'storage@gmail.com'},users:[{id:fullUser,username:'admin2',name:'Admin 2',email:'admin2@users.invalid',role:'admin',active:true,passwordEpoch:'epoch',journalId:'journal',memberKey:fullMemberKey}],cars:[],assignments:[],assignmentEvents:[],handovers:[],transactions:[],receipts:{},tombstones:[],audit:[],operations:[]};
 const nativeFiles={profile:{owner:'storage@gmail.com',box:fullProfile},root:{owner:'admin@gmail.com',box:plain(fullData,'organization:'+fullOrg)},journal:{owner:'storage@gmail.com',box:plain({format:'soxe-journal-v3',orgId:fullOrg,userId:fullUser,email:'admin2@users.invalid',token:undefined,events:[],activated:true,passwordEpoch:'epoch'},'journal:'+fullOrg+':'+fullUser)}};
 globalThis.fetch=async(url,options={})=>{
  const token=options.headers?.Authorization,match=url.match(/\/files\/([^?]+)/),id=match?.[1];let body;
- if(url.includes('/drive/v3/files?'))body={files:token==='Bearer s'?[{id:'profile',appProperties:{model:'two-google-v2',kind:'account',username:'admin2',orgId:fullOrg,userId:fullUser}}]:[]};
+ if(url.includes('/drive/v3/files?'))body={files:token==='Bearer s'?[{id:'profile',appProperties:{model:'organization-v2',kind:'account',username:'admin2',orgId:fullOrg,userId:fullUser}}]:[]};
  else if(url.includes('/drive/v2/files/')&&id)body={id,etag:'1',owners:[{emailAddress:nativeFiles[id].owner}],labels:{trashed:false}};
  else if(url.includes('?alt=media')&&id)body=nativeFiles[id].box;
  else throw new Error('Unexpected native Drive request: '+url);

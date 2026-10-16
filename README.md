@@ -1,4 +1,16 @@
-# Sổ Xe Tổ Chức — Đa nền tảng 4.8.3
+# Sổ Xe Tổ Chức v2
+
+Ứng dụng V2 được phát triển độc lập từ mã nguồn Sổ Xe Tổ Chức hiện tại và sử dụng vùng dữ liệu mới, không tự đọc hoặc chuyển dữ liệu của ứng dụng cũ.
+
+- Web V2: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc-v2/
+- Hướng dẫn Web V2: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc-v2/setup.html
+- Kho mã: https://github.com/lehuynhanhtu-prog/so-xe-to-chuc-v2
+
+## Trạng thái triển khai
+
+Bản Web là nền tảng được build và phát hành trước. Luồng dữ liệu hiện đã có namespace Drive riêng cho V2. Việc chuyển toàn bộ xác thực và phân quyền sang Google Apps Script backend theo đặc tả bàn giao đang tiếp tục; không coi bản Web đầu tiên là bản nghiệm thu cuối cùng.
+
+## Nền mã kế thừa 4.8.3
 
 Mô hình hai Google: tài khoản thứ nhất lưu dữ liệu Admin; tài khoản TK Google lưu dữ liệu NSD lưu tài khoản, nhật ký và bản dữ liệu được xem của NSD. Hồ sơ tài khoản/mật khẩu được mã hóa cơ bản; dữ liệu nghiệp vụ lưu JSON trực tiếp để ưu tiên tốc độ. Admin tạo NSD bằng tên định danh và mật khẩu ban đầu, không cần email hoặc lời mời. NSD kết nối Google TK Google lưu dữ liệu NSD, nhập tên định danh và bắt buộc đổi mật khẩu lần đầu.
 
@@ -9,8 +21,8 @@ Mô hình hai Google: tài khoản thứ nhất lưu dữ liệu Admin; tài kho
 - Không dùng Gmail/Picker trong mô hình mới, không lưu mật khẩu Google. Kết nối Google được giữ tạm trong tab đến khi token hết hạn; không lưu token trong localStorage. Mật khẩu app ít nhất 6 ký tự.
 - Tất cả người đăng nhập Google TK Google lưu dữ liệu NSD đều sở hữu dữ liệu Drive TK Google lưu dữ liệu NSD: phân quyền trong app không chặn đọc/xóa file trực tiếp trên Drive. Dữ liệu nghiệp vụ không mã hóa; chỉ hồ sơ đăng nhập được bảo vệ bằng mật khẩu. Cần kiểm soát quyền Google và sao lưu thường xuyên.
 
-Web: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc/
-Hướng dẫn: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc/setup.html
+Web cũ: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc/
+Hướng dẫn bản cũ: https://lehuynhanhtu-prog.github.io/so-xe-to-chuc/setup.html
 
 Có chức năng chuyển tổ chức từ mô hình mỗi NSD dùng Google riêng sang TK Google lưu dữ liệu NSD, giữ file cũ. Bản cũ nằm ở `web/legacy-drive-v3.html` và `docs/legacy-drive-v3.html`. Không nhập tiếp ở bản cũ sau khi chuyển.
 

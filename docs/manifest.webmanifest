@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Sổ Xe Tổ Chức — Quản lý đội xe",
-  "short_name": "Sổ Xe Tổ Chức",
-  "description": "Quản lý đội xe, chi phí, bàn giao xe và báo cáo. Dữ liệu đồng bộ qua Google Drive.",
+  "name": "Sổ Xe Tổ Chức v2 — Quản lý đội xe",
+  "short_name": "Sổ Xe V2",
+  "description": "Sổ Xe Tổ Chức v2 với vùng dữ liệu mới, độc lập ứng dụng cũ.",
   "lang": "vi",
   "start_url": "./",
   "scope": "./",

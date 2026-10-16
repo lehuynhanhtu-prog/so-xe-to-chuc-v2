@@ -1,7 +1,7 @@
 {
-  "name": "so-xe-to-chuc",
-  "version": "4.8.3",
-  "description": "Organization vehicle ledger using direct Google Drive API",
+  "name": "so-xe-to-chuc-v2",
+  "version": "2.0.0",
+  "description": "Sổ Xe Tổ Chức v2 web application",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -16,16 +16,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lehuynhanhtu-prog/so-xe-to-chuc.git"
+    "url": "git+https://github.com/lehuynhanhtu-prog/so-xe-to-chuc-v2.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/lehuynhanhtu-prog/so-xe-to-chuc/issues"
+    "url": "https://github.com/lehuynhanhtu-prog/so-xe-to-chuc-v2/issues"
   },
-  "homepage": "https://github.com/lehuynhanhtu-prog/so-xe-to-chuc#readme",
+  "homepage": "https://lehuynhanhtu-prog.github.io/so-xe-to-chuc-v2/",
   "dependencies": {
     "@noble/ciphers": "2.4.0",
     "@noble/hashes": "2.0.1"
