@@ -9,7 +9,7 @@
     :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17324d;background:#f3f7f8}*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input{font:inherit}.shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 10% 10%,#d9f3ed 0,transparent 38%),radial-gradient(circle at 90% 90%,#dcecff 0,transparent 42%)}.card{width:min(560px,100%);padding:34px;border:1px solid #d9e6e8;border-radius:22px;background:#ffffffed;box-shadow:0 24px 80px #17324d18}.brand{display:flex;align-items:center;gap:14px;margin-bottom:28px}.logo{display:grid;place-items:center;width:50px;height:50px;border-radius:15px;background:#0f766e;color:#fff;font-size:26px;box-shadow:0 10px 28px #0f766e3d}h1{font-size:26px;margin:0}h2{font-size:21px;margin:0 0 12px}p{line-height:1.65;color:#577085}.badge{display:inline-flex;align-items:center;gap:7px;margin:0 0 22px;padding:7px 11px;border-radius:999px;background:#e7f6f2;color:#0c635d;font-size:13px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:#16a085}label{display:block;margin:18px 0 7px;font-weight:700}input{width:100%;padding:13px 14px;border:1px solid #cbdadd;border-radius:11px;color:#17324d;background:#fff}button{width:100%;margin-top:18px;padding:13px 16px;border:0;border-radius:11px;background:#0f766e;color:#fff;font-weight:750;cursor:pointer}button.secondary{width:auto;margin:0;padding:9px 13px;background:#e6f1f0;color:#155e59}.note{margin-top:18px;padding:13px 15px;border-radius:11px;background:#f0f7fa;font-size:14px;color:#526c7e}.error{color:#ae2d27;background:#fff0ef;padding:12px 14px;border-radius:10px;margin-top:14px}.app{height:100vh;display:flex;flex-direction:column;background:#f4f7fb}.bar{height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 14px;border-bottom:1px solid #dbe5e8;background:white}.bar strong{white-space:nowrap}.actions{display:flex;gap:8px}.frame{width:100%;flex:1;border:0;background:white}@media(max-width:560px){.shell{padding:14px}.card{padding:25px 20px}.bar strong{font-size:14px}.bar .open{display:none}}
   </style>
 </head>
-<body data-build="2ba72f8c695c">
+<body data-build="da034e16061c">
   <main id="setup" class="shell">
     <section class="card">
       <div class="brand"><div class="logo">▤</div><div><h1>Sổ Xe Tổ Chức V2</h1><p style="margin:3px 0 0">Quản lý xe và chi phí dùng chung</p></div></div>
@@ -29,7 +29,7 @@
     <header class="bar"><strong>Sổ Xe Tổ Chức V2</strong><div class="actions"><button id="open" class="secondary open">Mở cửa sổ riêng</button><button id="change" class="secondary">Đổi dịch vụ</button></div></header>
     <iframe id="frame" class="frame" title="Sổ Xe Tổ Chức"></iframe>
   </main>
-  <script src="sheets-config.js?v=844d35fbc65e"></script>
+  <script src="sheets-config.js?v=1f8bdb022897"></script>
   <script>
     'use strict';
     const key='so-xe-sheets-service-url',setup=document.querySelector('#setup'),app=document.querySelector('#app'),frame=document.querySelector('#frame'),input=document.querySelector('#serviceUrl'),error=document.querySelector('#error');
