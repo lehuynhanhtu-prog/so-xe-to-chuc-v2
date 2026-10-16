@@ -10,7 +10,7 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
     const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.exposeFunction('invokeServer',({method,payload})=>{
-      if(!['health','prepareBootstrap','bootstrap','login','api','inspectAccessFile'].includes(method))throw new Error('Not public');
+      if(!['health','prepareBootstrap','bootstrap','login','api'].includes(method))throw new Error('Not public');
       return s.context[method](payload);
     });
     await page.evaluate(()=>{window.google={script:{run:new Proxy({}, {get(target,key){
@@ -21,19 +21,17 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
     await page.setContent(fs.readFileSync('apps-script/Index.html','utf8'));
     await page.locator('#initialPassword').fill('123456');await page.locator('#setupCode').fill(s.boot.setupCode);
     await page.getByRole('button',{name:'Tiếp tục',exact:true}).click();
-    await page.locator('#folderUrl').fill(s.boot.folderUrl);
-    await page.getByRole('button',{name:'Lưu thư mục và tiếp tục'}).click();
+    await page.locator('#sheetUrl').fill(s.boot.sheetUrl);
+    await page.getByRole('button',{name:'Kiểm tra Sheet và tiếp tục'}).click();
     await page.locator('#newPassword').fill(s.boot.password);await page.locator('#confirmPassword').fill(s.boot.password);
     await page.getByRole('button',{name:'Tiếp tục',exact:true}).click();
     await page.locator('#organizationName').fill('UI Organization');await page.locator('#adminName').fill('Admin Tu');
-    await page.getByRole('button',{name:'Tạo tổ chức trên Drive'}).click();
+    await page.getByRole('button',{name:'Tạo tổ chức trên Google Sheet'}).click();
     await page.locator('#app').waitFor({state:'visible',timeout:20000});
     await page.getByRole('button',{name:'Người sử dụng',exact:true}).click();
     await page.getByRole('button',{name:'Tạo tài khoản',exact:true}).click();
     await page.locator('[name=name]').fill('Driver One');await page.locator('[name=username]').fill('driver.one');
-    const download=page.waitForEvent('download');await page.locator('#modalSubmit').click();
-    const invitation=JSON.parse(fs.readFileSync(await (await download).path(),'utf8'));
-    assert.equal(invitation.format,'so-xe-access-encrypted');
+    await page.locator('#modalSubmit').click();
     await page.locator('#modal').waitFor({state:'hidden',timeout:20000});
     await page.getByRole('button',{name:'Xe',exact:true}).click();await page.getByRole('button',{name:'Thêm xe',exact:true}).click();
     await page.locator('[name=plate]').fill('51A-12345');await page.locator('[name=name]').fill('Test Car');await page.locator('#modalSubmit').click();
@@ -46,9 +44,8 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
     await page.screenshot({path:'/tmp/so-xe-drive-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'Đăng xuất',exact:true}).click();
-    await page.locator('#accessFile').setInputFiles({name:'access.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(invitation))});
     await page.locator('#username').waitFor({state:'visible'});
-    await page.waitForFunction(()=>document.querySelector('#username').value==='driver.one');
+    await page.locator('#username').fill('driver.one');
     await page.locator('#password').fill('11223344');await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();
     await page.locator('#current').fill('11223344');await page.locator('#new').fill(testDriverPassword);await page.locator('#confirm').fill(testDriverPassword);
     await page.getByRole('button',{name:'Đổi mật khẩu và vào ứng dụng'}).click();await page.locator('#app').waitFor({state:'visible',timeout:20000});
@@ -64,8 +61,7 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
     assert(await page.locator('#content').innerText().then(s=>s.includes('75.000')));
     await page.getByRole('button',{name:'Đăng xuất',exact:true}).click();assert.equal(await page.locator('#username').inputValue(),'');
     assert.equal(await page.locator('#content').innerHTML(),'');
-    await page.locator('#accessFile').setInputFiles({name:'access.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(invitation))});
-    await page.waitForFunction(()=>document.querySelector('#accessHint').textContent.includes('mật khẩu mới'));
+    await page.locator('#username').fill('driver.one');
     await page.locator('#password').fill(testDriverPassword);await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();
     await page.locator('#app').waitFor({state:'visible',timeout:20000});assert.deepEqual(errors,[]);
   }finally{await browser.close();}

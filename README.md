@@ -8,7 +8,13 @@
 
 ## Trạng thái triển khai
 
-Bản Web là nền tảng được build và phát hành trước. Luồng dữ liệu hiện đã có namespace Drive riêng cho V2. Việc chuyển toàn bộ xác thực và phân quyền sang Google Apps Script backend theo đặc tả bàn giao đang tiếp tục; không coi bản Web đầu tiên là bản nghiệm thu cuối cùng.
+Bản Web 2.1 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend. Apps Script chạy dưới quyền tài khoản chủ Sheet; NSD chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không thực hiện Google OAuth và không cần được chia sẻ Sheet/Drive.
+
+- Các bảng dữ liệu: `Cau_hinh`, `Nguoi_dung`, `Xe`, `Giao_dich`, `Phan_cong`, `Nhat_ky`.
+- Tệp đính kèm nằm trong thư mục Drive riêng tư do backend tạo; Sheet chỉ lưu metadata.
+- NSD chỉ nhập tên tài khoản và mật khẩu; backend tự đọc bảng `Nguoi_dung`. Không chia sẻ link Sheet, không cần file đăng nhập và không cần đăng nhập Google.
+- GitHub Pages là địa chỉ truy cập ổn định và mở Web App Apps Script đã cấu hình.
+- Hướng dẫn triển khai backend: [`apps-script/DEPLOY.md`](apps-script/DEPLOY.md).
 
 ## Nền mã kế thừa 4.8.3
 
@@ -29,7 +35,7 @@ Có chức năng chuyển tổ chức từ mô hình mỗi NSD dùng Google riê
 ## Phát triển
 
 `npm ci`, `npm test`, `npm run check`, `npm run test:ui`.
-Nguồn hiện tại: `web/dual-drive.mjs`, `web/dual-service.mjs`, `web/index.html`, `web/reports.mjs`. `web/service.mjs` là lõi giao dịch, phân công, lọc quyền và xử lý nhật ký. Build ra `docs/`, các module có mã phiên bản để tránh cache cũ.
+Backend và giao diện nghiệp vụ nằm trong `apps-script/`. Trang vào ứng dụng nằm ở `web/sheets-launcher.html`; `npm run build` tạo bản GitHub Pages trong `docs/`. Có thể đặt secret GitHub `APPS_SCRIPT_WEB_APP_URL` để workflow tự cấu hình URL backend khi triển khai.
 
 ## Lịch sử bản 3.1 và Apps Script
 

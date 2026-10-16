@@ -1,14 +1,23 @@
-/* Sổ Xe Tổ Chức — all business data lives in the configured Drive folder.
+/* Sổ Xe Tổ Chức — business records live in a private Google Spreadsheet.
+ * Attachments live in a private Drive folder owned by the deployment account.
  * Helpers end in _ so google.script.run cannot invoke them.
  * Script Properties contain only deployment keys/configuration, never business records.
  */
-const SX_FILE_ = 'so-xe-to-chuc-v2.enc.json';
-const SX_MAX_BYTES_ = 15 * 1024 * 1024;
+const SX_FORMAT_ = 'so-xe-sheets-v2';
+const SX_TABLES_ = {
+  'Cau_hinh':['key','value'],
+  'Nguoi_dung':['id','username','name','role','password','mustChange','sessionVersion','deletedAt'],
+  'Xe':['id','plate','name','odo','version','attachments'],
+  'Giao_dich':['id','carId','date','category','amount','odo','note','enteredBy','enteredFor','createdAt','updatedAt','version','attachments'],
+  'Phan_cong':['id','carId','userId','startedAt','assignedBy','endedAt'],
+  'Nhat_ky':['id','actor','action','target','at']
+};
 const SX_PASSWORD_ROUNDS_ = 600000;
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index').setTitle('Sổ Xe Tổ Chức')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 // Run in the Apps Script editor before publishing. Never callable from the web.
@@ -21,10 +30,10 @@ function initializeDeployment_() {
 }
 function health() {
   const p = PropertiesService.getScriptProperties();
-  return {version:'2.0.1',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
+  return {version:'2.1.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
 }
 function prepareBootstrap(request) {
-  return locked_(function(){validateSetup_(request);if(request.folderUrl)folder_(request.folderUrl);return {accepted:true};});
+  return locked_(function(){validateSetup_(request);if(request.sheetUrl)spreadsheet_(request.sheetUrl);return {accepted:true};});
 }
 function validateSetup_(request){
   const p=props_();if(p.getProperty('SX_STATE')!=='new')throw new Error('Dịch vụ không ở trạng thái tạo tổ chức.');
@@ -36,16 +45,15 @@ function validateSetup_(request){
 function bootstrap(request) {
   return locked_(function () {
     validateSetup_(request);
-    const p = props_(), folder = folder_(request.folderUrl);
-    if (folder.getFilesByName(SX_FILE_).hasNext()) throw new Error('Thư mục đã có dữ liệu v2. Không ghi đè.');
-    if (folder.getFilesByName('so-xe-organization-data.json').hasNext()) throw new Error('Thư mục chứa dữ liệu bản cũ. Cần sao lưu và chuyển đổi trước khi tạo tổ chức v2.');
+    const p = props_(), spreadsheet = spreadsheet_(request.sheetUrl);
+    ensureWorkbookAvailable_(spreadsheet);
     strongPassword_(request.password);
     const user = {id:uuid_(),username:'admin',name:string_(request.adminName,80),role:'admin',password:password_(request.password),mustChange:false,sessionVersion:1};
-    const db = {format:'so-xe-drive-v2',id:uuid_(),name:string_(request.organizationName,120),revision:1,users:[user],cars:[],transactions:[],assignments:[],audit:[],createdAt:now_()};
+    const db = {format:SX_FORMAT_,id:uuid_(),name:string_(request.organizationName,120),revision:1,users:[user],cars:[],transactions:[],assignments:[],audit:[],createdAt:now_()};
     audit_(db,user,'createOrganization',db.id);
-    const file = folder.createFile(SX_FILE_,seal_(db),MimeType.PLAIN_TEXT);
-    // A completed ciphertext exists before the deployment starts accepting logins.
-    p.setProperties({SX_FOLDER:folder.getId(),SX_FILE:file.getId(),SX_ORG:db.id,SX_STATE:'ready'});
+    const filesFolder = DriveApp.createFolder('So Xe To Chuc - Tep dinh kem - '+db.id);
+    p.setProperties({SX_SHEET:spreadsheet.getId(),SX_FILES_FOLDER:filesFolder.getId(),SX_ORG:db.id,SX_STATE:'ready'});
+    writeDatabase_(spreadsheet,db);
     p.deleteProperty('SX_SETUP_HASH');
     return {token:token_(db,user),data:view_(db,user)};
   });
@@ -53,14 +61,10 @@ function bootstrap(request) {
 function login(request) {
   return locked_(function () {
     const db=load_(), username=string_(request.username,40).toLowerCase();
-    let capsule=null;
-    if(request.accessFile){capsule=access_(request.accessFile);if(capsule.organizationId!==db.id||capsule.username!==username)throw new Error('File không thuộc tài khoản hoặc tổ chức này.');}
     limited_('login:'+username);
-    const account=db.users.find(x=>x.username===username&&!x.deletedAt);
-    if(account?.inviteHash&&!request.accessFile)throw new Error('Hãy nhập lại file đăng nhập do Admin cấp, rồi nhập mật khẩu hiện tại.');
     const u=db.users.find(x=>x.username===username&&!x.deletedAt);
-    if (!u || (u.inviteHash&&!equal_(hash_(capsule?capsule.inviteSecret:''),u.inviteHash)) || !verifyPassword_(request.password,u.password)) {
-      failed_('login:'+username); throw new Error('Thông tin đăng nhập không đúng hoặc file đăng nhập đã hết hiệu lực.');
+    if (!u || !verifyPassword_(request.password,u.password)) {
+      failed_('login:'+username); throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
     }
     CacheService.getScriptCache().remove('failure:login:'+username);
     return {token:token_(db,u),data:view_(db,u)};
@@ -83,23 +87,22 @@ function api(request) {
       const t=db.transactions.find(x=>x.id===a.transactionId),c=db.cars.find(x=>x.id===a.carId);
       if(t?!canView_(db,u,t):!c||!visibleCar_(db,u,c.id))throw new Error('Không có quyền xem tệp.');
       const f=(t||c).attachments.find(x=>x.id===a.id);if(!f)throw new Error('Tệp không tồn tại.');
-      return {file:f};
+      const blob=DriveApp.getFileById(f.fileId).getBlob();
+      return {file:{id:f.id,name:f.name,type:f.type,size:f.size,base64:Utilities.base64Encode(blob.getBytes())}};
     }
-    if(action==='export') {admin_(u);return {backup:seal_(db)};}
+    if(action==='export') {admin_(u);return {backup:seal_(exportSnapshot_(db))};}
     if(action==='deleteOrganization') {
       admin_(u);
       if(a.confirmation!==db.name||!verifyPassword_(a.password,u.password))throw new Error('Tên tổ chức hoặc mật khẩu xác nhận không đúng.');
-      // Only delete this app's file, never other files in the shared folder.
-      DriveApp.getFileById(props_().getProperty('SX_FILE')).setTrashed(true);
+      DriveApp.getFileById(props_().getProperty('SX_SHEET')).setTrashed(true);
+      DriveApp.getFolderById(props_().getProperty('SX_FILES_FOLDER')).setTrashed(true);
       props_().setProperty('SX_STATE','deleted');return {deleted:true};
     }
-    if(action==='changeFolder') {
-      admin_(u);const target=folder_(a.folderUrl),p=props_();
-      if(target.getId()===p.getProperty('SX_FOLDER'))return {data:view_(db,u)};
-      if(target.getFilesByName(SX_FILE_).hasNext())throw new Error('Thư mục đích đã có dữ liệu v2.');
-      // Move the single encrypted file containing records AND attachments.
-      DriveApp.getFileById(p.getProperty('SX_FILE')).moveTo(target);
-      p.setProperty('SX_FOLDER',target.getId());audit_(db,u,action,db.id);save_(db);return {data:view_(db,u)};
+    if(action==='changeSpreadsheet') {
+      admin_(u);const target=spreadsheet_(a.sheetUrl),p=props_();
+      if(target.getId()===p.getProperty('SX_SHEET'))return {data:view_(db,u)};
+      ensureWorkbookAvailable_(target);audit_(db,u,action,db.id);db.revision++;
+      writeDatabase_(target,db);p.setProperty('SX_SHEET',target.getId());return {data:view_(db,u)};
     }
     if(u.role==='viewer')throw new Error('Tài khoản chỉ xem không có quyền sửa dữ liệu.');
     let extra={};
@@ -109,13 +112,12 @@ function api(request) {
         admin_(u);const username=string_(a.username,40).toLowerCase();
         if(!/^[a-z0-9_.-]{3,40}$/.test(username)||db.users.some(x=>x.username===username))throw new Error('Tên đăng nhập không hợp lệ hoặc đã được dùng.');
         if(!['admin','viewer','driver'].includes(a.role))throw new Error('Vai trò không hợp lệ.');
-        const secret=b64_(random_(24)),nu={id:uuid_(),username,name:string_(a.name,80),role:a.role,password:password_('11223344'),mustChange:true,sessionVersion:1,inviteHash:hash_(secret)};
-        db.users.push(nu);extra.invitation=invitation_(db,nu,secret);break;
+        const nu={id:uuid_(),username,name:string_(a.name,80),role:a.role,password:password_('11223344'),mustChange:true,sessionVersion:1};
+        db.users.push(nu);break;
       }
-      case 'inviteUser': {
-        admin_(u);const target=user_(db,a.id);if(target.id===u.id)throw new Error('Không cấp lại file cho tài khoản đang đăng nhập.');
-        const secret=b64_(random_(24));target.inviteHash=hash_(secret);target.sessionVersion++;
-        extra.invitation=invitation_(db,target,secret);break;
+      case 'resetPassword': {
+        admin_(u);const target=user_(db,a.id);if(target.id===u.id)throw new Error('Hãy dùng chức năng Đổi mật khẩu cho tài khoản đang đăng nhập.');
+        target.password=password_('11223344');target.mustChange=true;target.sessionVersion++;break;
       }
       case 'deleteUser': {
         admin_(u);const target=user_(db,a.id);
@@ -162,9 +164,15 @@ function api(request) {
 }
 function locked_(fn) {const lock=LockService.getScriptLock();if(!lock.tryLock(20000))throw new Error('Dịch vụ đang bận. Hãy thử lại.');try{return fn();}finally{lock.releaseLock();}}
 function props_(){const p=PropertiesService.getScriptProperties();if(!p.getProperty('SX_KEY'))throw new Error('Chủ thư mục cần khởi tạo dịch vụ trước.');return p;}
-function load_(){const p=props_();if(p.getProperty('SX_STATE')!=='ready')throw new Error('Tổ chức chưa được tạo hoặc đã bị xóa.');const cached=CacheService.getScriptCache().get('snapshot:'+p.getProperty('SX_FILE'));if(cached){const db=open_(cached);if(db.id===p.getProperty('SX_ORG'))return db;}const f=DriveApp.getFileById(p.getProperty('SX_FILE'));if(f.isTrashed())throw new Error('File dữ liệu đã bị xóa.');const ciphertext=f.getBlob().getDataAsString(),db=open_(ciphertext);if(db.id!==p.getProperty('SX_ORG')||db.format!=='so-xe-drive-v2')throw new Error('File dữ liệu không khớp tổ chức.');cacheSnapshot_(f.getId(),ciphertext);return db;}
-function save_(db){db.revision++;const content=seal_(db);if(content.length>SX_MAX_BYTES_)throw new Error('Dữ liệu vượt giới hạn 15 MB của bản web này. Hãy giảm tệp đính kèm trước khi lưu.');DriveApp.getFileById(props_().getProperty('SX_FILE')).setContent(content);cacheSnapshot_(props_().getProperty('SX_FILE'),content);}
-function cacheSnapshot_(id,content){const c=CacheService.getScriptCache();if(content.length<90000)c.put('snapshot:'+id,content,30);else c.remove('snapshot:'+id);}
+function load_(){
+  const p=props_();if(p.getProperty('SX_STATE')!=='ready')throw new Error('Tổ chức chưa được tạo hoặc đã bị xóa.');
+  const db=readDatabase_(SpreadsheetApp.openById(p.getProperty('SX_SHEET')));
+  if(db.id!==p.getProperty('SX_ORG')||db.format!==SX_FORMAT_)throw new Error('Google Sheet không khớp tổ chức.');return db;
+}
+function save_(db){
+  const spreadsheet=SpreadsheetApp.openById(props_().getProperty('SX_SHEET')),previous=readDatabase_(spreadsheet);
+  db.revision++;writeDatabase_(spreadsheet,db);trashRemovedAttachments_(previous,db);
+}
 function view_(db,u){
   if(u.mustChange)return {organization:{id:db.id,name:db.name},me:{id:u.id,username:u.username,name:u.name,role:u.role,mustChange:true},revision:db.revision};
   const visible=db.transactions.filter(x=>canView_(db,u,x));
@@ -174,7 +182,7 @@ function view_(db,u){
     users:db.users.filter(x=>!x.deletedAt).map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,mustChange:x.mustChange})),
     cars:db.cars.filter(x=>full||visibleCar_(db,u,x.id)).map(strip),
     carChoices:db.cars.map(x=>({id:x.id,plate:x.plate,name:x.name})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
-  if(u.role==='admin')result.organization.folderUrl='https://drive.google.com/drive/folders/'+props_().getProperty('SX_FOLDER');
+  if(u.role==='admin')result.organization.sheetUrl='https://docs.google.com/spreadsheets/d/'+props_().getProperty('SX_SHEET')+'/edit';
   return result;
 }
 function assigned_(db,carId){const a=db.assignments.find(x=>x.carId===carId&&!x.endedAt);return a?a.userId:null;}
@@ -190,28 +198,64 @@ function audit_(db,u,action,target){db.audit.push({id:uuid_(),actor:u.id,action,
 function string_(x,max,empty){if(typeof x!=='string'||x.length>max||(!empty&&!x.trim()))throw new Error('Thông tin nhập thiếu hoặc quá dài.');return x.trim();}
 function number_(x,min,max){if(typeof x!=='number'||!Number.isFinite(x)||x<min||x>max)throw new Error('Giá trị số không hợp lệ.');return x;}
 function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['11223344','123456','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
-function folder_(url){const m=String(url||'').match(/^https:\/\/drive\.google\.com\/drive\/folders\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/);if(!m)throw new Error('Link thư mục Google Drive không hợp lệ.');const f=DriveApp.getFolderById(m[1]);if(f.isTrashed())throw new Error('Thư mục đã bị xóa.');return f;}
+function spreadsheet_(url){const m=String(url||'').match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/);if(!m)throw new Error('Link Google Sheet không hợp lệ.');return SpreadsheetApp.openById(m[1]);}
+function ensureWorkbookAvailable_(spreadsheet){
+  const marker=spreadsheet.getSheetByName('Cau_hinh');
+  if(marker&&marker.getLastRow()>0)throw new Error('Google Sheet này đã có dữ liệu Sổ Xe. Hãy dùng một Sheet trống dành riêng cho ứng dụng.');
+}
+function sheet_(spreadsheet,name){return spreadsheet.getSheetByName(name)||spreadsheet.insertSheet(name);}
+function encodeCell_(value){return JSON.stringify(value===undefined?null:value);}
+function decodeCell_(value){if(value===''||value===null)return null;try{return JSON.parse(String(value));}catch(e){throw new Error('Dữ liệu trong Google Sheet không đúng định dạng tại giá trị: '+String(value).slice(0,40));}}
+function writeRows_(spreadsheet,name,rows){
+  const headers=SX_TABLES_[name],tab=sheet_(spreadsheet,name),values=[headers].concat(rows.map(row=>headers.map(key=>encodeCell_(row[key]))));
+  tab.clearContents();tab.getRange(1,1,values.length,headers.length).setNumberFormat('@').setValues(values);tab.setFrozenRows(1);
+}
+function readRows_(spreadsheet,name){
+  const tab=spreadsheet.getSheetByName(name);if(!tab||tab.getLastRow()<2)return [];
+  const values=tab.getRange(1,1,tab.getLastRow(),SX_TABLES_[name].length).getValues(),headers=values.shift().map(String);
+  if(headers.join('|')!==SX_TABLES_[name].join('|'))throw new Error('Cấu trúc bảng '+name+' đã bị thay đổi.');
+  return values.filter(row=>row.some(value=>value!=='')).map(row=>Object.fromEntries(headers.map((key,index)=>[key,decodeCell_(row[index])])));
+}
+function writeDatabase_(spreadsheet,db){
+  writeRows_(spreadsheet,'Cau_hinh',[
+    {key:'format',value:db.format},{key:'id',value:db.id},{key:'name',value:db.name},
+    {key:'revision',value:db.revision},{key:'createdAt',value:db.createdAt}
+  ]);
+  writeRows_(spreadsheet,'Nguoi_dung',db.users);
+  writeRows_(spreadsheet,'Xe',db.cars);
+  writeRows_(spreadsheet,'Giao_dich',db.transactions);
+  writeRows_(spreadsheet,'Phan_cong',db.assignments);
+  writeRows_(spreadsheet,'Nhat_ky',db.audit);
+  SpreadsheetApp.flush();
+}
+function readDatabase_(spreadsheet){
+  const settings=Object.fromEntries(readRows_(spreadsheet,'Cau_hinh').map(row=>[row.key,row.value]));
+  if(!settings.id||settings.format!==SX_FORMAT_)throw new Error('Google Sheet chưa được khởi tạo hoặc không đúng phiên bản.');
+  return {format:settings.format,id:settings.id,name:settings.name,revision:Number(settings.revision||0),createdAt:settings.createdAt,
+    users:readRows_(spreadsheet,'Nguoi_dung'),cars:readRows_(spreadsheet,'Xe'),transactions:readRows_(spreadsheet,'Giao_dich'),
+    assignments:readRows_(spreadsheet,'Phan_cong'),audit:readRows_(spreadsheet,'Nhat_ky')};
+}
+function attachmentIds_(db){
+  const ids=new Set();db.cars.concat(db.transactions).forEach(record=>(record.attachments||[]).forEach(file=>{if(file.fileId)ids.add(file.fileId);}));return ids;
+}
+function trashRemovedAttachments_(before,after){
+  const keep=attachmentIds_(after);attachmentIds_(before).forEach(id=>{if(!keep.has(id)){try{DriveApp.getFileById(id).setTrashed(true);}catch(e){console.warn('Không thể xóa tệp cũ '+id+': '+e.message);}}});
+}
+function exportSnapshot_(db){
+  const snapshot=JSON.parse(JSON.stringify(db));snapshot.cars.concat(snapshot.transactions).forEach(record=>(record.attachments||[]).forEach(file=>{
+    if(file.fileId)file.base64=Utilities.base64Encode(DriveApp.getFileById(file.fileId).getBlob().getBytes());
+  }));return snapshot;
+}
 function attachments_(input,old){
   if(!Array.isArray(input)||input.length>5)throw new Error('Tối đa 5 tệp mỗi giao dịch/xe.');
   const seen={};return input.map(x=>{
     if(x.id){const keep=old.find(f=>f.id===x.id);if(!keep||seen[x.id])throw new Error('Tệp đính kèm không hợp lệ.');seen[x.id]=true;return keep;}
     const name=string_(x.name,150),type=String(x.type||'application/octet-stream');
     if(type.length>100||typeof x.base64!=='string'||x.base64.length>2800000||! /^[A-Za-z0-9+/]*={0,2}$/.test(x.base64))throw new Error('Tệp không hợp lệ hoặc lớn hơn 2 MB.');
-    const size=unb64_(x.base64).length;if(size>2*1024*1024)throw new Error('Mỗi tệp tối đa 2 MB.');return {id:uuid_(),name,type,size,base64:x.base64};
+    const bytes=unb64_(x.base64),size=bytes.length;if(size>2*1024*1024)throw new Error('Mỗi tệp tối đa 2 MB.');
+    const blob=Utilities.newBlob(Array.from(bytes).map(v=>v>127?v-256:v),type,name),file=DriveApp.getFolderById(props_().getProperty('SX_FILES_FOLDER')).createFile(blob);
+    return {id:uuid_(),name,type,size,fileId:file.getId()};
   });
-}
-function inspectAccessFile(envelope){
-  const p=access_(envelope),db=load_(),u=db.users.find(x=>x.username===p.username&&!x.deletedAt);if(p.organizationId!==db.id||!u||!equal_(hash_(p.inviteSecret),u.inviteHash))throw new Error('File đã hết hiệu lực. Hãy dùng file mới nhất do Admin cấp.');return {username:p.username,organizationName:db.name,appUrl:p.appUrl,mustChange:u.mustChange};
-}
-function access_(envelope){
-  if(!envelope||JSON.stringify(envelope).length>10000||envelope.format!=='so-xe-access-encrypted'||envelope.version!==2||envelope.cipher!=='AES-256-GCM')throw new Error('File đăng nhập không hợp lệ.');
-  try{return JSON.parse(text_(DriveCrypto.gcm(purposeKey_('access'),unb64_(envelope.nonce),utf8_('so-xe-access-v2')).decrypt(unb64_(envelope.ciphertext))));}catch(e){throw new Error('File không được cấp bởi dịch vụ này hoặc đã bị thay đổi.');}
-}
-function invitation_(db,u,secret){
-  // Only the server can open the capsule. It never sends the Drive key to users.
-  const nonce=random_(12);
-  const payload={format:'so-xe-access',version:2,organizationId:db.id,organizationName:db.name,username:u.username,inviteSecret:secret,folderUrl:'https://drive.google.com/drive/folders/'+props_().getProperty('SX_FOLDER'),appUrl:ScriptApp.getService().getUrl()};
-  return {format:'so-xe-access-encrypted',version:2,cipher:'AES-256-GCM',nonce:b64_(nonce),ciphertext:b64_(DriveCrypto.gcm(purposeKey_('access'),nonce,utf8_('so-xe-access-v2')).encrypt(utf8_(JSON.stringify(payload))))};
 }
 function token_(db,u){const body=b64_(utf8_(JSON.stringify({org:db.id,uid:u.id,sv:u.sessionVersion,exp:Date.now()+8*60*60*1000,nonce:b64_(random_(16))})));return body+'.'+b64_(DriveCrypto.hmac(DriveCrypto.sha256,purposeKey_('session'),utf8_(body)));}
 function auth_(db,token){

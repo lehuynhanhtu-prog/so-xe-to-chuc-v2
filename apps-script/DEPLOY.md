@@ -1,97 +1,72 @@
-# Triển khai Sổ Xe Tổ Chức trên Google Drive
+# Triển khai Sổ Xe Tổ Chức với Google Sheets
 
-Bản web v2 dùng Google Apps Script cho giao diện và dịch vụ. Dữ liệu nghiệp vụ, tài khoản, xe, phân công, giao dịch và tệp đính kèm chỉ nằm trong một file mã hóa `so-xe-to-chuc-v2.enc.json` tại thư mục Drive bạn chọn. Không dùng Supabase, không dùng tài khoản Drive của lái xe, không lưu bản dữ liệu hay tên đăng nhập trong trình duyệt.
+Bản 2.1 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend/giao diện. Apps Script chạy bằng tài khoản của chủ dữ liệu; người sử dụng (NSD) chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không cần tài khoản Google và không được chia sẻ Google Sheet.
 
-## 1. Chuẩn bị dưới tài khoản chủ thư mục
+## Kiến trúc
 
-1. Đăng nhập Google bằng tài khoản sở hữu hoặc có quyền chỉnh sửa thư mục dùng chung.
-2. Mở https://script.google.com và chọn **New project / Dự án mới**. Đặt tên **So Xe To Chuc**.
-3. Thay nội dung file **Code.gs** bằng nội dung `Code.gs` trong gói này.
-4. Nhấn **+ → Script**, đặt tên **Crypto**, dán nội dung `Crypto.gs`. Thư viện mã hóa được đóng gói sẵn, không phải cài thêm thư viện.
-5. Nhấn **+ → HTML**, đặt tên **Index**, dán nội dung `Index.html`.
-6. Mở **Project Settings / Cài đặt dự án**, bật **Show appsscript.json manifest file in editor**. Trở lại trình soạn thảo, thay nội dung `appsscript.json` bằng file tương ứng trong gói này.
-7. Lưu dự án.
+- Google Sheet riêng tư chứa các bảng `Cau_hinh`, `Nguoi_dung`, `Xe`, `Giao_dich`, `Phan_cong`, `Nhat_ky`.
+- Tệp đính kèm nằm trong một thư mục Drive riêng tư do dịch vụ tự tạo; Sheet chỉ lưu metadata và ID tệp.
+- Mật khẩu được băm PBKDF2-SHA256 với salt riêng và 600.000 vòng. Phiên đăng nhập được ký, hết hạn sau 8 giờ và bị thu hồi khi đổi hoặc đặt lại mật khẩu.
+- NSD không thấy link Google Sheet, không nhận quyền Drive và không thực hiện Google OAuth.
 
-**Không đổi `Crypto.gs` thành HTML. Không dán khóa hoặc mật khẩu cá nhân vào mã nguồn.**
+## 1. Chuẩn bị Google Sheet
 
-## 2. Khởi tạo và cấp quyền một lần
+1. Dùng tài khoản Google sẽ sở hữu dữ liệu để tạo một Google Sheet trống, dành riêng cho ứng dụng.
+2. Không chia sẻ Sheet cho NSD. Chỉ tài khoản triển khai Apps Script cần quyền chỉnh sửa.
+3. Sao chép URL dạng `https://docs.google.com/spreadsheets/d/.../edit`.
 
-1. Thêm tạm hàm `function khoiTaoLanDau() { initializeDeployment_(); }` ở cuối Code.gs, lưu rồi chọn **khoiTaoLanDau → Run / Chạy**. Hàm riêng có dấu `_` có thể không hiện trong danh sách.
-2. Chọn **Review permissions / Xem xét quyền**, chọn đúng tài khoản chủ thư mục và cấp quyền Drive cho dự án vừa tạo.
-3. Nếu Google hiển thị **Ứng dụng chưa được xác minh**, chỉ tiếp tục khi đây chính là dự án Apps Script bạn vừa tạo và bạn đang dùng tài khoản chủ dự án: **Advanced / Nâng cao → Go to So Xe To Chuc / Đi tới So Xe To Chuc → Allow / Cho phép**. Nếu chính sách đơn vị chặn, cần quản trị viên Workspace cho phép; không yêu cầu lái xe vượt màn hình này.
-4. Trong **Execution log / Nhật ký thực thi**, sao chép **Mã thiết lập một lần**. Giữ mã này riêng cho Admin ban đầu.
-5. Xóa hàm tạm `khoiTaoLanDau` sau khi nhận mã, lưu trước khi triển khai; không để lời gọi khởi tạo ngoài hàm. Không chạy lại bước khởi tạo và không xóa Script Properties. Khóa mã hóa ở Script Properties phải được giữ để đọc dữ liệu Drive về sau.
+## 2. Tạo dự án Apps Script
 
-Mã thiết lập giúp ngăn người khác chiếm quyền tạo Admin khi họ biết mật khẩu mặc định `123456`.
+1. Mở https://script.google.com bằng tài khoản chủ Sheet và tạo dự án **So Xe To Chuc**.
+2. Dán lần lượt các file `Code.gs`, `Crypto.gs`, `Index.html` từ thư mục này.
+3. Bật manifest trong **Project Settings**, rồi thay nội dung bằng `appsscript.json`.
+4. Lưu dự án. Không đưa URL Sheet, mật khẩu hay khóa bí mật vào GitHub.
 
-## 3. Phát hành bản web
+## 3. Khởi tạo một lần
 
-1. Nhấn **Deploy / Triển khai → New deployment / Bản triển khai mới**.
-2. Chọn loại **Web app / Ứng dụng web**.
-3. **Execute as / Thực thi dưới quyền:** **Me / Tôi**, tức tài khoản chủ thư mục.
-4. **Who has access / Ai có quyền truy cập:** **Anyone / Bất kỳ ai**. Không chọn **Anyone with Google account** vì lái xe cần vào không có Google.
-5. Nhấn **Deploy**, sao chép URL kết thúc bằng **/exec**. Đây là địa chỉ app dùng cho mọi người.
-6. Mở URL bằng cửa sổ ẩn danh và kiểm tra không xuất hiện yêu cầu đăng nhập Google. Nếu không có lựa chọn **Anyone**, tài khoản Workspace có thể bị chính sách tổ chức hạn chế; phải giải quyết chính sách này trước.
+1. Thêm tạm vào cuối `Code.gs`: `function khoiTaoLanDau() { initializeDeployment_(); }`.
+2. Chạy `khoiTaoLanDau`, cấp quyền Google Sheets và Drive cho chính dự án của bạn.
+3. Sao chép **Mã thiết lập một lần** trong Execution log và giữ riêng cho Admin.
+4. Xóa hàm tạm rồi lưu. Không chạy lại và không xóa Script Properties.
 
-Tài liệu Google: https://developers.google.com/apps-script/guides/web
+## 4. Phát hành Web App không yêu cầu Google
 
-## 4. Admin tạo tổ chức
+1. Chọn **Deploy → New deployment → Web app**.
+2. **Execute as:** Me (tài khoản chủ Sheet).
+3. **Who has access:** Anyone. Không chọn “Anyone with Google account”.
+4. Triển khai và sao chép URL kết thúc bằng `/exec`.
+5. Mở URL bằng cửa sổ ẩn danh. Màn hình phải vào thẳng ứng dụng, không hiện đăng nhập Google.
 
-1. Mở URL web app, đăng nhập ban đầu với tên **admin**, mật khẩu **123456** và mã thiết lập một lần.
-2. Nhập link thư mục dùng chung, bấm **Lưu thư mục và tiếp tục**. Dùng link thư mục của bạn; link thật không được đưa vào mã nguồn công khai.
-3. Tạo mật khẩu Admin mới, ít nhất 8 ký tự, khác mật khẩu mặc định.
-4. Nhập tên tổ chức và tên Admin. Bấm **Tạo tổ chức trên Drive**. Dịch vụ kiểm tra truy cập thư mục, tạo file mã hóa rồi mở app.
-5. Vào **Người sử dụng**, tạo tài khoản, chọn vai trò. Mật khẩu ban đầu của tài khoản được cấp là **11223344**.
-6. File đăng nhập mã hóa tự tải xuống. Gửi **URL web app + file này** riêng cho đúng người nhận. App không tự gửi email/Zalo.
-7. Vào **Xe**, thêm xe; sau đó chọn **Phân công** và người quản lý/lái xe.
+Nếu Google Workspace không cho chọn **Anyone**, quản trị viên Workspace phải cho phép triển khai ẩn danh. Không yêu cầu NSD vượt cảnh báo quyền hoặc đăng nhập Google.
 
-Admin tạo thêm Admin hoặc Admin chỉ xem bằng cùng quy trình. Nếu cấp lại file, file cũ và các phiên của tài khoản đó bị vô hiệu; mật khẩu hiện tại giữ nguyên.
+## 5. Tạo tổ chức và tài khoản
 
-## 5. Người quản lý/lái xe sử dụng
+1. Mở Web App, nhập tài khoản Admin khởi tạo và mã thiết lập một lần theo màn hình.
+2. Dán link Google Sheet trống, tạo mật khẩu Admin mới, nhập tên tổ chức và tên Admin.
+3. Dịch vụ tạo các bảng trong Sheet và thư mục Drive riêng cho tệp đính kèm.
+4. Admin tạo tài khoản NSD. Ứng dụng cấp mật khẩu lần đầu theo quy trình nội bộ; NSD bắt buộc đổi ngay.
+5. Gửi URL ứng dụng, tên đăng nhập và mật khẩu lần đầu cho đúng người nhận qua kênh riêng.
 
-1. Mở URL web app do Admin gửi.
-2. Chọn file thông tin đăng nhập mã hóa. Dịch vụ điền tên đăng nhập; không hiển thị link Drive.
-3. Đăng nhập lần đầu bằng **11223344**, đổi mật khẩu ngay khi app yêu cầu.
-4. Mỗi phiên mới cần nhập lại file và mật khẩu. App không ghi nhớ tên theo thiết bị.
-5. Nhập/sửa/xóa giao dịch khi có Internet. App báo lỗi nếu ghi thất bại; không coi dữ liệu là đã lưu ngoại tuyến.
-6. Được xem giao dịch mình nhập (kể cả nhập hộ) và tất cả giao dịch của xe hiện được phân công. Chỉ sửa/xóa giao dịch mình nhập. Admin chỉ xem không được sửa hoặc xóa.
+Mỗi NSD chỉ nhập tên đăng nhập và mật khẩu ứng dụng. Backend tự tra tài khoản trong bảng `Nguoi_dung`. NSD không cần tài khoản Google, không cần file đăng nhập, không được biết link Sheet và không có quyền truy cập trực tiếp Sheet/Drive.
 
-## 6. Giới hạn và bảo quản
+## 6. Phân quyền
 
-- Tệp đính kèm nằm bên trong file dữ liệu mã hóa: tối đa **2 MB/tệp**, **5 tệp/xe hoặc giao dịch**; toàn bộ file mã hóa giới hạn **15 MB** ở bản này. Phù hợp tổ chức nhỏ; chưa phù hợp lưu số lượng lớn ảnh/video.
-- Bản này có các loại chi phí cơ bản và tệp đính kèm. Chưa chuyển các tính năng nhắc hạn, bàn giao và khôi phục tự phục vụ của bản cũ vào giao diện mới.
-- Apps Script có hạn mức và thời gian chạy của Google, không phải dịch vụ không giới hạn. Hạn mức: https://developers.google.com/apps-script/guides/services/quotas
-- Không cần bật quyền công khai cho folder. Giữ folder chỉ chia sẻ cho Admin/chủ dịch vụ. Địa chỉ folder không phải thông tin cấp quyền ghi.
-- Admin chỉ xem được xem toàn bộ dữ liệu qua app, nhưng không được xem cấu hình link Drive. Chỉ Admin được xem/đổi link, sửa tên tổ chức hoặc xóa tổ chức.
-- Xóa giao dịch/xe loại bỏ cả tệp đính kèm trong dữ liệu hiện hành. Các bản sao lưu và lịch sử phiên bản Drive cũ có thể còn nội dung; Drive Trash cần chủ tài khoản dọn nếu muốn xóa vĩnh viễn.
-- Xóa tổ chức yêu cầu tên tổ chức và mật khẩu Admin, đưa **file riêng của app** vào Trash, khóa dịch vụ. Không xóa folder hay các file khác của bạn. Muốn tạo tổ chức mới, dùng dự án dịch vụ mới.
-- Khóa mã hóa và ID cấu hình nằm trong **Script Properties**, không nằm trong folder chia sẻ hoặc mã JavaScript của người dùng. Đây là bí mật cấu hình của dịch vụ, không phải bản sao dữ liệu nghiệp vụ.
-- Chủ dịch vụ có quyền giải mã, vì dịch vụ phải kiểm tra quyền và phục vụ dữ liệu. Người có quyền chỉnh sửa dự án Apps Script cũng có thể đọc khóa; chỉ chia sẻ dự án cho quản trị viên đáng tin cậy.
-- File đăng nhập mã hóa chứa định danh tổ chức, tên đăng nhập, link folder và bí mật cấp quyền; dịch vụ giải mã. Ai có cả file và mật khẩu ban đầu có thể chiếm tài khoản chưa đổi mật khẩu. Gửi riêng và yêu cầu người nhận đổi ngay.
+- **Admin:** quản lý toàn bộ tổ chức, xe, tài khoản, phân công và giao dịch.
+- **Admin chỉ xem:** xem toàn bộ dữ liệu, không sửa/xóa và không xem link Sheet.
+- **Người quản lý/lái xe:** xem xe được phân công và dữ liệu được phép; chỉ sửa/xóa giao dịch do mình nhập.
 
-## 7. Sao lưu và chuyển dịch vụ
+Mọi thao tác ghi được khóa bằng `LockService`; trường `version` chặn ghi đè bản ghi đã bị người khác sửa.
 
-Trong app, Admin chọn **Tổ chức → Tải bản sao mã hóa**. File gồm dữ liệu và tệp đính kèm. Để có thể phục hồi, chủ dịch vụ cần lưu riêng các Script Properties ở **Project Settings → Script Properties**, đặc biệt **SX_KEY**, trong trình quản lý mật khẩu hoặc nơi bí mật. Không gửi khóa trong hội thoại, không đưa vào GitHub hoặc folder chia sẻ.
+## 7. Sao lưu và bảo quản
 
-Khi phục hồi kỹ thuật sang dự án Apps Script mới: sao chép 4 file mã, khôi phục **SX_KEY** chính xác; đưa bản sao mã hóa về folder, đặt tên `so-xe-to-chuc-v2.enc.json`, cấu hình **SX_FILE** là ID file mới, **SX_FOLDER** là ID folder, **SX_ORG** là giá trị cũ và **SX_STATE=ready**. Không chạy `initializeDeployment_` vì nó sinh khóa mới. Triển khai dưới chủ folder. Nếu URL dịch vụ đổi, Admin cần gửi URL mới cùng file đăng nhập; file vẫn dùng được nếu khóa/tổ chức được giữ. Quy trình này chưa có nút khôi phục trong app.
+- Admin có thể tải bản sao mã hóa chứa dữ liệu và nội dung tệp đính kèm.
+- Thiết lập trigger hằng ngày/tuần để sao chép Google Sheet sang thư mục backup riêng nếu cần.
+- Giữ kín `SX_KEY` trong Script Properties. Không gửi khóa qua hội thoại và không lưu vào GitHub.
+- Giữ Sheet và thư mục tệp đính kèm ở chế độ riêng tư. Quyền “Anyone” chỉ áp dụng cho URL Web App; backend vẫn kiểm tra tài khoản nội bộ, mật khẩu và vai trò.
+- Google Apps Script/Sheets có hạn mức. Bản này phù hợp tổ chức nhỏ và vừa; tệp tối đa 2 MB, tối đa 5 tệp cho mỗi xe hoặc giao dịch.
 
-Bản dữ liệu v1 dùng mật khẩu mã hóa chung không tương thích v2. App từ chối tạo tổ chức v2 trong folder có file v1 để tránh ghi đè; cần sao lưu và di trú riêng. Không có công cụ chuyển đổi tự động trong gói này.
+## 8. Cập nhật phiên bản
 
-## 8. Kiểm tra sau triển khai
+Thay `Code.gs` và `Index.html`, sau đó **Deploy → Manage deployments → Edit → New version → Deploy**. Không chạy lại hàm khởi tạo, không xóa Script Properties và không tạo lại Sheet. NSD tiếp tục dùng URL và tài khoản cũ.
 
-Kiểm tra trên Drive thật trước khi nhập dữ liệu thật:
-
-1. Admin tạo xe và hai tài khoản lái xe, phân công hai xe khác nhau.
-2. Đăng nhập lái xe bằng cửa sổ ẩn danh, nhập file, đổi mật khẩu; không có màn hình Google.
-3. Lái xe A nhập một giao dịch xe mình và một giao dịch nhập hộ xe B.
-4. Lái xe B thấy giao dịch nhập hộ của xe B; lái xe A không thấy giao dịch khác của xe B do người khác nhập.
-5. Lái xe không sửa/xóa giao dịch người khác; Admin chỉ xem không sửa/xóa được.
-6. Tải lại trang, đăng nhập lại và kiểm tra giao dịch còn trên Drive. Tệp trong folder là JSON chứa ciphertext, không có tên người hoặc nội dung giao dịch rõ.
-7. Thử xóa người đã được phân công xe: dịch vụ từ chối. Thử hai Admin sửa cùng giao dịch: bản cũ bị yêu cầu tải lại.
-8. Thử xóa tệp, giao dịch và xe trên dữ liệu thử; xác nhận file dữ liệu hiện hành đã loại bỏ nội dung liên quan.
-
-Kiểm thử tự động trong repository mô phỏng dịch vụ Drive/Apps Script; không thay thế bước cấp quyền, kiểm tra triển khai ẩn danh và hạn mức trên Google thật.
-
-## Cập nhật bản sửa phân công và đăng nhập
-
-Thay Code.gs và Index.html bằng bản mới, lưu, chọn Quản lý bản triển khai → bút chì → Phiên bản mới → Triển khai. Không khởi tạo lại, không xóa Script Properties. Sau đổi mật khẩu, mỗi phiên mới nhập lại file được cấp và mật khẩu mới. File cấp lại vô hiệu file trước; đổi folder giữ file đăng nhập còn hiệu lực. Folder tài khoản khác cần cấp quyền chỉnh sửa cho tài khoản thực thi Apps Script. Bộ đệm chỉ giữ ciphertext tối đa 30 giây trong CacheService, Drive vẫn là nguồn lưu trữ lâu dài duy nhất. Thay đổi trực tiếp ngoài app có thể mất 30 giây để thấy.
+Trước khi dùng dữ liệu thật, hãy kiểm tra bằng cửa sổ ẩn danh: tạo hai NSD, phân công xe, nhập/sửa/xóa giao dịch, tải tệp và xác nhận NSD không gặp màn hình Google.
