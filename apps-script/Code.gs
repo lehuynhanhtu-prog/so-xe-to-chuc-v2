@@ -24,9 +24,17 @@ function doGet() {
 function initializeDeployment_() {
   const p = PropertiesService.getScriptProperties();
   if (p.getProperty('SX_KEY')) throw new Error('Dịch vụ đã khởi tạo. Không tạo lại khóa.');
-  const key = random_(32), setup = b64_(random_(24));
-  p.setProperties({SX_KEY:b64_(key), SX_SETUP_HASH:hash_(setup), SX_STATE:'new'});
-  console.log('Mã thiết lập một lần (giữ riêng): ' + setup);
+  const key = random_(32);
+  const spreadsheet = SpreadsheetApp.create('So Xe To Chuc V2 - Du lieu');
+  const db = {format:SX_FORMAT_,id:uuid_(),name:'Sổ Xe Tổ Chức',revision:1,
+    users:[{id:uuid_(),username:'admin',name:'Quản trị viên',role:'admin',
+      password:password_('123789'),mustChange:true,sessionVersion:1}],
+    cars:[],transactions:[],assignments:[],audit:[],createdAt:now_()};
+  const folder = DriveApp.createFolder('So Xe To Chuc - Tep dinh kem - '+db.id);
+  writeDatabase_(spreadsheet,db);
+  p.setProperties({SX_KEY:b64_(key),SX_SHEET:spreadsheet.getId(),
+    SX_FILES_FOLDER:folder.getId(),SX_ORG:db.id,SX_STATE:'ready'});
+  console.log('Đã tạo Google Sheet riêng tư. Chỉ chủ sở hữu được xem ID trong Script Properties.');
 }
 function health() {
   const p = PropertiesService.getScriptProperties();
@@ -143,18 +151,18 @@ function api(request) {
       }
       case 'saveTransaction': {
         const existing=a.id?transaction_(db,a.id):null;
-        if(existing&&!canEdit_(u,existing))throw new Error('Chỉ được sửa giao dịch do mình nhập.');
+        if(existing&&!canEdit_(db,u,existing))throw new Error('Chỉ được sửa giao dịch do mình nhập.');
         version_(existing,a.version);car_(db,a.carId);
         if(u.role==='driver'&&existing&&a.carId!==existing.carId)throw new Error('Không được chuyển giao dịch sang xe khác.');
-        // Drivers can enter on behalf for any car, but do not receive other records for that car.
-        const enteredFor=a.enteredFor||assigned_(db,a.carId)||u.id;user_(db,enteredFor);
+        if(u.role==='driver'&&assigned_(db,a.carId)!==u.id)throw new Error('Chỉ được nhập giao dịch cho xe đang quản lý.');
+        const enteredFor=u.role==='driver'?u.id:(a.enteredFor||assigned_(db,a.carId)||u.id);user_(db,enteredFor);
         if(!['fuel','maintenance','insurance','inspection','road_fee','other'].includes(a.category))throw new Error('Loại chi phí không hợp lệ.');
         if(!/^\d{4}-\d{2}-\d{2}$/.test(a.date)||!Number.isFinite(Date.parse(a.date)))throw new Error('Ngày giao dịch không hợp lệ.');
         const next={id:existing?existing.id:uuid_(),carId:a.carId,date:a.date,category:a.category,amount:number_(a.amount,0,1000000000000),odo:number_(a.odo,0,10000000),note:string_(a.note,2000,true),enteredBy:existing?existing.enteredBy:u.id,enteredFor,createdAt:existing?existing.createdAt:now_(),updatedAt:now_(),version:(existing?existing.version:0)+1,attachments:attachments_(a.attachments,existing?existing.attachments:[])};
         if(existing)db.transactions[db.transactions.indexOf(existing)]=next;else db.transactions.push(next);break;
       }
       case 'deleteTransaction': {
-        const t=transaction_(db,a.id);if(!canEdit_(u,t))throw new Error('Chỉ được xóa giao dịch do mình nhập.');version_(t,a.version);
+        const t=transaction_(db,a.id);if(!canEdit_(db,u,t))throw new Error('Chỉ được xóa giao dịch do mình nhập.');version_(t,a.version);
         db.transactions=db.transactions.filter(x=>x.id!==t.id);break;
       }
       default:throw new Error('Thao tác không được hỗ trợ.');
@@ -181,13 +189,13 @@ function view_(db,u){
   const result={organization:{id:db.id,name:db.name},me:{id:u.id,username:u.username,name:u.name,role:u.role,mustChange:false},revision:db.revision,
     users:db.users.filter(x=>!x.deletedAt).map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,mustChange:x.mustChange})),
     cars:db.cars.filter(x=>full||visibleCar_(db,u,x.id)).map(strip),
-    carChoices:db.cars.map(x=>({id:x.id,plate:x.plate,name:x.name})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
-  if(u.role==='admin')result.organization.sheetUrl='https://docs.google.com/spreadsheets/d/'+props_().getProperty('SX_SHEET')+'/edit';
+    carChoices:db.cars.filter(x=>full||assigned_(db,x.id)===u.id).map(x=>({id:x.id,plate:x.plate,name:x.name})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
+  // Never expose the private spreadsheet URL to application clients.
   return result;
 }
 function assigned_(db,carId){const a=db.assignments.find(x=>x.carId===carId&&!x.endedAt);return a?a.userId:null;}
 function canView_(db,u,t){return u.role!=='driver'||t.enteredBy===u.id||assigned_(db,t.carId)===u.id;}
-function canEdit_(u,t){return u.role==='admin'||u.role==='driver'&&t.enteredBy===u.id;}
+function canEdit_(db,u,t){return u.role==='admin'||u.role==='driver'&&t.enteredBy===u.id&&assigned_(db,t.carId)===u.id;}
 function visibleCar_(db,u,id){return u.role!=='driver'||assigned_(db,id)===u.id||db.transactions.some(x=>x.carId===id&&x.enteredBy===u.id);}
 function admin_(u){if(u.role!=='admin')throw new Error('Chỉ Admin có quyền thực hiện thao tác này.');}
 function user_(db,id){const x=db.users.find(x=>x.id===id&&!x.deletedAt);if(!x)throw new Error('Tài khoản không tồn tại.');return x;}
@@ -197,7 +205,7 @@ function version_(x,v){if(x&&x.version!==v)throw new Error('Dữ liệu đã đ�
 function audit_(db,u,action,target){db.audit.push({id:uuid_(),actor:u.id,action,target,at:now_()});}
 function string_(x,max,empty){if(typeof x!=='string'||x.length>max||(!empty&&!x.trim()))throw new Error('Thông tin nhập thiếu hoặc quá dài.');return x.trim();}
 function number_(x,min,max){if(typeof x!=='number'||!Number.isFinite(x)||x<min||x>max)throw new Error('Giá trị số không hợp lệ.');return x;}
-function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['11223344','123456','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
+function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['123789','11223344','123456','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
 function spreadsheet_(url){const m=String(url||'').match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/);if(!m)throw new Error('Link Google Sheet không hợp lệ.');return SpreadsheetApp.openById(m[1]);}
 function ensureWorkbookAvailable_(spreadsheet){
   const marker=spreadsheet.getSheetByName('Cau_hinh');
