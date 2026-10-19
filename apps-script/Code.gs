@@ -7,8 +7,8 @@ const SX_FORMAT_ = 'so-xe-sheets-v2';
 const SX_TABLES_ = {
   'Cau_hinh':['key','value'],
   'Nguoi_dung':['id','username','name','role','password','mustChange','sessionVersion','deletedAt'],
-  'Xe':['id','plate','name','odo','version','attachments'],
-  'Giao_dich':['id','carId','date','category','amount','odo','note','enteredBy','enteredFor','createdAt','updatedAt','version','attachments'],
+  'Xe':['id','plate','name','year','powerType','odo','version','attachments'],
+  'Giao_dich':['id','carId','date','category','amount','odo','description','fuelPrice','liters','batteryFrom','batteryTo','repeatKm','repeatMonths','insuranceProvider','insurancePolicy','insuranceStart','insuranceExpiry','note','enteredBy','enteredFor','createdAt','updatedAt','version','attachments'],
   'Phan_cong':['id','carId','userId','startedAt','assignedBy','endedAt'],
   'Nhat_ky':['id','actor','action','target','at']
 };
@@ -28,7 +28,7 @@ function initializeDeployment_() {
 }
 function health() {
   const p = PropertiesService.getScriptProperties();
-  return {version:'2.2.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
+  return {version:'2.3.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
 }
 function bootstrap(request) {
   return locked_(function () {
@@ -121,7 +121,8 @@ function api(request) {
       case 'saveCar': {
         admin_(u);const existing=a.id?car_(db,a.id):null;version_(existing,a.version);
         const plate=string_(a.plate,30).toUpperCase();if(db.cars.some(x=>x.plate===plate&&x.id!==a.id))throw new Error('Biển số đã tồn tại.');
-        const next={id:existing?existing.id:uuid_(),plate,name:string_(a.name,100),odo:number_(a.odo,0,10000000),version:(existing?existing.version:0)+1,attachments:attachments_(a.attachments,existing?existing.attachments:[])};
+        const powerType=['fuel','electric','hybrid'].includes(a.powerType)?a.powerType:'fuel';
+        const next={id:existing?existing.id:uuid_(),plate,name:string_(a.name,100),year:string_(String(a.year||''),4,true),powerType,odo:number_(a.odo,0,10000000),version:(existing?existing.version:0)+1,attachments:attachments_(a.attachments,existing?existing.attachments:[])};
         if(existing)db.cars[db.cars.indexOf(existing)]=next;else db.cars.push(next);break;
       }
       case 'deleteCar': {
@@ -137,13 +138,20 @@ function api(request) {
       case 'saveTransaction': {
         const existing=a.id?transaction_(db,a.id):null;
         if(existing&&!canEdit_(u,existing))throw new Error('Chỉ được sửa giao dịch do mình nhập.');
-        version_(existing,a.version);car_(db,a.carId);
+        version_(existing,a.version);const selectedCar=car_(db,a.carId);
         if(u.role==='driver'&&existing&&a.carId!==existing.carId)throw new Error('Không được chuyển giao dịch sang xe khác.');
         // Drivers can enter on behalf for any car, but do not receive other records for that car.
         const enteredFor=a.enteredFor||assigned_(db,a.carId)||u.id;user_(db,enteredFor);
-        if(!['fuel','maintenance','insurance','inspection','road_fee','other'].includes(a.category))throw new Error('Loại chi phí không hợp lệ.');
+        if(!['fuel','charge','battery_rental','maintenance','parts','insurance','inspection','road_fee','other'].includes(a.category))throw new Error('Loại chi phí không hợp lệ.');
+        if(selectedCar.powerType==='electric'&&a.category==='fuel')throw new Error('Xe điện không có chi phí đổ xăng.');
+        if((!selectedCar.powerType||selectedCar.powerType==='fuel')&&['charge','battery_rental'].includes(a.category))throw new Error('Chi phí sạc xe/thuê pin chỉ áp dụng cho xe điện hoặc điện–xăng.');
         if(!/^\d{4}-\d{2}-\d{2}$/.test(a.date)||!Number.isFinite(Date.parse(a.date)))throw new Error('Ngày giao dịch không hợp lệ.');
-        const next={id:existing?existing.id:uuid_(),carId:a.carId,date:a.date,category:a.category,amount:number_(a.amount,0,1000000000000),odo:number_(a.odo,0,10000000),note:string_(a.note,2000,true),enteredBy:existing?existing.enteredBy:u.id,enteredFor,createdAt:existing?existing.createdAt:now_(),updatedAt:now_(),version:(existing?existing.version:0)+1,attachments:attachments_(a.attachments,existing?existing.attachments:[])};
+        const insuranceStart=dateField_(a.insuranceStart,'Ngày hiệu lực'),insuranceExpiry=dateField_(a.insuranceExpiry,'Ngày hết hạn');
+        if(['insurance','inspection','road_fee'].includes(a.category)&&!insuranceExpiry)throw new Error('Cần nhập ngày hết hạn.');
+        if(insuranceStart&&insuranceExpiry<insuranceStart)throw new Error('Ngày hết hạn phải từ ngày hiệu lực trở đi.');
+        const batteryFrom=number_(Number(a.batteryFrom||0),0,100),batteryTo=number_(Number(a.batteryTo||0),0,100);
+        if(a.category==='charge'&&batteryTo<=batteryFrom)throw new Error('Pin sau sạc phải lớn hơn pin trước sạc.');
+        const next={id:existing?existing.id:uuid_(),carId:a.carId,date:a.date,category:a.category,amount:number_(a.amount,0,1000000000000),odo:number_(a.odo,0,10000000),description:string_(a.description||'',1000,true),fuelPrice:number_(Number(a.fuelPrice||0),0,1000000000),liters:number_(Number(a.liters||0),0,1000000),batteryFrom,batteryTo,repeatKm:number_(Number(a.repeatKm||0),0,10000000),repeatMonths:number_(Number(a.repeatMonths||0),0,1200),insuranceProvider:string_(a.insuranceProvider||'',200,true),insurancePolicy:string_(a.insurancePolicy||'',200,true),insuranceStart,insuranceExpiry,note:string_(a.note||'',2000,true),enteredBy:existing?existing.enteredBy:u.id,enteredFor,createdAt:existing?existing.createdAt:now_(),updatedAt:now_(),version:(existing?existing.version:0)+1,attachments:attachments_(a.attachments,existing?existing.attachments:[])};
         if(existing)db.transactions[db.transactions.indexOf(existing)]=next;else db.transactions.push(next);break;
       }
       case 'deleteTransaction': {
@@ -171,10 +179,15 @@ function view_(db,u){
   const visible=db.transactions.filter(x=>canView_(db,u,x));
   const strip=x=>Object.assign({},x,{attachments:(x.attachments||[]).map(f=>({id:f.id,name:f.name,type:f.type,size:f.size}))});
   const full=u.role!=='driver';
+  const assignedUserId=carId=>assigned_(db,carId),reminder=transaction=>({id:transaction.id,carId:transaction.carId,date:transaction.date,category:transaction.category,odo:transaction.odo,description:transaction.description||'',repeatKm:transaction.repeatKm||0,repeatMonths:transaction.repeatMonths||0,insuranceProvider:transaction.insuranceProvider||'',insurancePolicy:transaction.insurancePolicy||'',insuranceStart:transaction.insuranceStart||'',insuranceExpiry:transaction.insuranceExpiry||'',updatedAt:transaction.updatedAt||''});
   const result={organization:{id:db.id,name:db.name},me:{id:u.id,username:u.username,name:u.name,role:u.role,mustChange:false},revision:db.revision,
     users:db.users.filter(x=>!x.deletedAt).map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,mustChange:x.mustChange})),
     cars:db.cars.filter(x=>full||visibleCar_(db,u,x.id)).map(strip),
-    carChoices:db.cars.map(x=>({id:x.id,plate:x.plate,name:x.name})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
+    carChoices:db.cars.map(x=>({id:x.id,plate:x.plate,name:x.name,powerType:x.powerType||'fuel',assignedUserId:assignedUserId(x.id)})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
+  if(u.role==='driver'){
+    result.reminderTransactions=db.transactions.filter(x=>assignedUserId(x.carId)===u.id&&isReminder_(x)).map(reminder);
+    result.reminderOdoByCar=Object.fromEntries(db.cars.filter(x=>assignedUserId(x.id)===u.id).map(c=>[c.id,Math.max(Number(c.odo)||0,...db.transactions.filter(t=>t.carId===c.id).map(t=>Number(t.odo)||0))]));
+  }
   if(u.role==='admin')result.organization.sheetUrl='https://docs.google.com/spreadsheets/d/'+props_().getProperty('SX_SHEET')+'/edit';
   return result;
 }
@@ -190,6 +203,8 @@ function version_(x,v){if(x&&x.version!==v)throw new Error('Dữ liệu đã đ�
 function audit_(db,u,action,target){db.audit.push({id:uuid_(),actor:u.id,action,target,at:now_()});}
 function string_(x,max,empty){if(typeof x!=='string'||x.length>max||(!empty&&!x.trim()))throw new Error('Thông tin nhập thiếu hoặc quá dài.');return x.trim();}
 function number_(x,min,max){if(typeof x!=='number'||!Number.isFinite(x)||x<min||x>max)throw new Error('Giá trị số không hợp lệ.');return x;}
+function dateField_(value,label){value=String(value||'');if(!value)return '';if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value)throw new Error(label+' không hợp lệ.');return value;}
+function isReminder_(t){return ['maintenance','parts'].includes(t.category)&&(t.repeatKm||t.repeatMonths)||['insurance','inspection','road_fee'].includes(t.category)&&t.insuranceExpiry;}
 function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['11223344','123456','123789','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
 function spreadsheet_(url){const m=String(url||'').match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/);if(!m)throw new Error('Link Google Sheet không hợp lệ.');return SpreadsheetApp.openById(m[1]);}
 function ensureWorkbookAvailable_(spreadsheet){

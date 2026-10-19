@@ -90,6 +90,25 @@ test('failed logins are throttled and bootstrap can only run once',()=>{
   const fresh=service();fresh.context.bootstrap(fresh.boot);
   assert.throws(()=>fresh.context.bootstrap(fresh.boot),/trạng thái/);
 });
+test('category-specific costs, due dates and electric vehicle expenses are stored safely',()=>{
+  const s=service(),admin=s.context.bootstrap(s.boot).token;
+  const fuel=s.invoke(admin,'saveCar',{plate:'51A-00001',name:'Xe xăng',year:'2024',powerType:'fuel',odo:1000,attachments:[]}).data.cars[0];
+  const electric=s.invoke(admin,'saveCar',{plate:'51E-00002',name:'Xe điện',year:'2026',powerType:'electric',odo:500,attachments:[]}).data.cars.find(c=>c.powerType==='electric');
+  assert.throws(()=>s.invoke(admin,'saveTransaction',{carId:electric.id,date:'2026-10-19',category:'fuel',amount:100,odo:510,attachments:[]}),/Xe điện/);
+  assert.throws(()=>s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'insurance',amount:100,odo:1010,attachments:[]}),/ngày hết hạn/);
+  s.invoke(admin,'saveTransaction',{carId:electric.id,date:'2026-10-19',category:'charge',amount:150000,odo:510,description:'Sạc nhanh',batteryFrom:20,batteryTo:85,attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:electric.id,date:'2026-10-19',category:'battery_rental',amount:1200000,odo:510,description:'Thuê pin tháng 10',attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'insurance',amount:500000,odo:1010,insuranceProvider:'Bảo hiểm A',insurancePolicy:'BH-01',insuranceStart:'2026-10-19',insuranceExpiry:'2027-10-18',attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'inspection',amount:300000,odo:1010,insuranceExpiry:'2027-04-19',attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'road_fee',amount:200000,odo:1010,insuranceExpiry:'2027-10-19',attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'maintenance',amount:700000,odo:1010,description:'Thay dầu',repeatKm:5000,repeatMonths:6,attachments:[]});
+  s.invoke(admin,'saveTransaction',{carId:fuel.id,date:'2026-10-19',category:'parts',amount:900000,odo:1010,description:'Lốp xe',repeatKm:40000,repeatMonths:36,attachments:[]});
+  const data=s.invoke(admin,'read').data;
+  assert.deepEqual(data.transactions.map(t=>t.category).sort(),['battery_rental','charge','inspection','insurance','maintenance','parts','road_fee']);
+  assert.equal(data.transactions.find(t=>t.category==='charge').batteryTo,85);
+  assert.equal(data.transactions.find(t=>t.category==='insurance').insuranceExpiry,'2027-10-18');
+  assert.equal(data.transactions.find(t=>t.category==='maintenance').repeatKm,5000);
+});
 test('server helpers cannot be called through google.script.run and browser stores no identity',()=>{
   const code=fs.readFileSync('apps-script/Code.gs','utf8');
   const publicFunctions=[...code.matchAll(/^function (\w+)\(/gm)].map(x=>x[1]).filter(x=>!x.endsWith('_'));
