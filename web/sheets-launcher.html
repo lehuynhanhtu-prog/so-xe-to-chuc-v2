@@ -6,41 +6,37 @@
   <meta name="theme-color" content="#0f766e">
   <title>Sổ Xe Tổ Chức v2</title>
   <style>
-    :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17324d;background:#f3f7f8}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100vh}button,input{font:inherit}.shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 10% 10%,#d9f3ed 0,transparent 38%),radial-gradient(circle at 90% 90%,#dcecff 0,transparent 42%)}.card{width:min(560px,100%);padding:34px;border:1px solid #d9e6e8;border-radius:22px;background:#ffffffed;box-shadow:0 24px 80px #17324d18}.brand{display:flex;align-items:center;gap:14px;margin-bottom:28px}.logo{display:grid;place-items:center;width:50px;height:50px;border-radius:15px;background:#0f766e;color:#fff;font-size:26px;box-shadow:0 10px 28px #0f766e3d}h1{font-size:26px;margin:0}h2{font-size:21px;margin:0 0 12px}p{line-height:1.65;color:#577085}.badge{display:inline-flex;align-items:center;gap:7px;margin:0 0 22px;padding:7px 11px;border-radius:999px;background:#e7f6f2;color:#0c635d;font-size:13px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:#16a085}label{display:block;margin:18px 0 7px;font-weight:700}input{width:100%;padding:13px 14px;border:1px solid #cbdadd;border-radius:11px;color:#17324d;background:#fff}button{width:100%;margin-top:18px;padding:13px 16px;border:0;border-radius:11px;background:#0f766e;color:#fff;font-weight:750;cursor:pointer}button.secondary{width:auto;margin:0;padding:9px 13px;background:#e6f1f0;color:#155e59}.note{margin-top:18px;padding:13px 15px;border-radius:11px;background:#f0f7fa;font-size:14px;color:#526c7e}.error{color:#ae2d27;background:#fff0ef;padding:12px 14px;border-radius:10px;margin-top:14px}.app{height:100vh;display:flex;flex-direction:column;background:#f4f7fb}.bar{height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 14px;border-bottom:1px solid #dbe5e8;background:white}.bar strong{white-space:nowrap}.actions{display:flex;gap:8px}.frame{width:100%;flex:1;border:0;background:white}@media(max-width:560px){.shell{padding:14px}.card{padding:25px 20px}.bar strong{font-size:14px}.bar .open{display:none}}
+    :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17324d;background:#f3f7f8}*{box-sizing:border-box}body{margin:0;min-height:100vh}.shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 10% 10%,#d9f3ed 0,transparent 38%),radial-gradient(circle at 90% 90%,#dcecff 0,transparent 42%)}.card{width:min(520px,100%);padding:34px;border:1px solid #d9e6e8;border-radius:22px;background:#ffffffed;box-shadow:0 24px 80px #17324d18;text-align:center}.logo{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 18px;border-radius:16px;background:#0f766e;color:#fff;font-size:28px;box-shadow:0 10px 28px #0f766e3d}h1{font-size:26px;margin:0}p{line-height:1.65;color:#577085}.spinner{width:34px;height:34px;margin:24px auto;border:4px solid #d8e9e6;border-top-color:#0f766e;border-radius:50%;animation:spin .8s linear infinite}.open{display:inline-block;margin-top:8px;padding:13px 18px;border-radius:11px;background:#0f766e;color:#fff;font-weight:750;text-decoration:none}.error{color:#ae2d27;background:#fff0ef;padding:12px 14px;border-radius:10px;margin-top:18px}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:560px){.shell{padding:14px}.card{padding:28px 20px}}
   </style>
 </head>
 <body>
-  <main id="setup" class="shell">
+  <main class="shell">
     <section class="card">
-      <div class="brand"><div class="logo">▤</div><div><h1>Sổ Xe Tổ Chức V2</h1><p style="margin:3px 0 0">Quản lý xe và chi phí dùng chung</p></div></div>
-      <div class="badge"><span class="dot"></span> Google Sheets · NSD không cần Google</div>
-      <h2>Kết nối dịch vụ của tổ chức</h2>
-      <p>Admin nhập URL Web App của Google Apps Script một lần trên thiết bị này. Người sử dụng chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp.</p>
-      <form id="form">
-        <label for="serviceUrl">URL Web App Apps Script</label>
-        <input id="serviceUrl" type="url" required autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec">
-        <button>Kết nối ứng dụng</button>
-      </form>
+      <div class="logo">▤</div>
+      <h1>Sổ Xe Tổ Chức V2</h1>
+      <p id="status">Đang mở ứng dụng…</p>
+      <div id="spinner" class="spinner" aria-hidden="true"></div>
+      <a id="open" class="open" href="#">Mở ứng dụng</a>
       <div id="error" class="error" hidden></div>
-      <div class="note">Google Sheet và tệp đính kèm vẫn riêng tư. Không chia sẻ Sheet cho NSD.</div>
     </section>
-  </main>
-  <main id="app" class="app" hidden>
-    <header class="bar"><strong>Sổ Xe Tổ Chức V2</strong><div class="actions"><button id="open" class="secondary open">Mở cửa sổ riêng</button><button id="change" class="secondary">Đổi dịch vụ</button></div></header>
-    <iframe id="frame" class="frame" title="Sổ Xe Tổ Chức"></iframe>
   </main>
   <script src="sheets-config.js"></script>
   <script>
     'use strict';
-    const key='so-xe-sheets-service-url',setup=document.querySelector('#setup'),app=document.querySelector('#app'),frame=document.querySelector('#frame'),input=document.querySelector('#serviceUrl'),error=document.querySelector('#error');
+    const open=document.querySelector('#open'),status=document.querySelector('#status'),spinner=document.querySelector('#spinner'),error=document.querySelector('#error');
     const valid=url=>/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec(?:[?#].*)?$/.test(url);
-    let current='';
-    function connect(url,persist=true){url=String(url||'').trim();if(!valid(url)){error.textContent='URL chưa đúng. Hãy dùng địa chỉ Apps Script kết thúc bằng /exec.';error.hidden=false;return false;}current=url;if(persist)localStorage.setItem(key,url);error.hidden=true;frame.src=url;setup.hidden=true;app.hidden=false;return true;}
-    document.querySelector('#form').addEventListener('submit',event=>{event.preventDefault();connect(input.value);});
-    document.querySelector('#open').addEventListener('click',()=>window.open(current,'_blank','noopener'));
-    document.querySelector('#change').addEventListener('click',()=>{frame.src='about:blank';app.hidden=true;setup.hidden=false;input.value=current;input.focus();});
-    const query=new URLSearchParams(location.search).get('service'),configured=window.SO_XE_SHEETS_CONFIG?.serviceUrl,remembered=localStorage.getItem(key),target=query||configured||remembered;
-    if(target){if(!connect(target,false))input.value=target;}else error.hidden=true;
+    const query=new URLSearchParams(location.search).get('service'),configured=window.SO_XE_SHEETS_CONFIG?.serviceUrl,target=String(query||configured||'').trim();
+    if(valid(target)){
+      open.href=target;
+      // Top-level navigation avoids Google's iframe restrictions in mobile and in-app browsers.
+      location.replace(target);
+    }else{
+      status.textContent='Chưa thể mở ứng dụng.';
+      spinner.hidden=true;
+      open.hidden=true;
+      error.textContent='Địa chỉ dịch vụ chưa được cấu hình đúng. Vui lòng liên hệ Admin.';
+      error.hidden=false;
+    }
   </script>
 </body>
 </html>

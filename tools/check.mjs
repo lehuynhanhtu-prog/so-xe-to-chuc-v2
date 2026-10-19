@@ -7,6 +7,7 @@ console.log('Apps Script and browser JavaScript parse successfully.');
 const web=readFileSync('web/index.html','utf8');
 const published=readFileSync('docs/index.html','utf8');
 if(!published.startsWith('<!doctype html>')||!published.includes('<title>Sổ Xe Tổ Chức v2</title>'))throw new Error('Published Web entry is not valid HTML.');
+if(published.includes('<iframe')||!published.includes('location.replace(target)'))throw new Error('Published launcher must use top-level navigation for mobile compatibility.');
 if(web.includes('google.script.run'))throw new Error('Web v3 must not call Apps Script.');
 if(!web.includes('SO_XE_GOOGLE_CONFIG'))throw new Error('Google config missing.');
 const {spawnSync}=await import('node:child_process');
