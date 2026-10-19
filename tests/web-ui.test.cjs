@@ -10,7 +10,7 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
     const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.exposeFunction('invokeServer',({method,payload})=>{
-      if(!['health','prepareBootstrap','bootstrap','login','api'].includes(method))throw new Error('Not public');
+      if(!['health','bootstrap','login','api'].includes(method))throw new Error('Not public');
       return s.context[method](payload);
     });
     await page.evaluate(()=>{window.google={script:{run:new Proxy({}, {get(target,key){
@@ -19,14 +19,9 @@ test('desktop/mobile onboarding, create user and car, transactions and driver pe
       return payload=>{const success=target.success,failure=target.failure;window.invokeServer({method:key,payload}).then(success).catch(e=>failure({message:e.message}));};
     }})}};});
     await page.setContent(fs.readFileSync('apps-script/Index.html','utf8'));
-    await page.locator('#initialPassword').fill('123456');await page.locator('#setupCode').fill(s.boot.setupCode);
-    await page.getByRole('button',{name:'Tiếp tục',exact:true}).click();
-    await page.locator('#sheetUrl').fill(s.boot.sheetUrl);
-    await page.getByRole('button',{name:'Kiểm tra Sheet và tiếp tục'}).click();
-    await page.locator('#newPassword').fill(s.boot.password);await page.locator('#confirmPassword').fill(s.boot.password);
-    await page.getByRole('button',{name:'Tiếp tục',exact:true}).click();
-    await page.locator('#organizationName').fill('UI Organization');await page.locator('#adminName').fill('Admin Tu');
-    await page.getByRole('button',{name:'Tạo tổ chức trên Google Sheet'}).click();
+    assert.equal(await page.locator('#initialUsername').inputValue(),'admin');
+    await page.locator('#initialPassword').fill('123789');
+    await page.getByRole('button',{name:'Đăng nhập và tự động thiết lập'}).click();
     await page.locator('#app').waitFor({state:'visible',timeout:20000});
     await page.getByRole('button',{name:'Người sử dụng',exact:true}).click();
     await page.getByRole('button',{name:'Tạo tài khoản',exact:true}).click();

@@ -6,16 +6,15 @@ test('Sheets account login, private attachments, roles and concurrent edits',()=
   const s=service(),c=s.context;
   const randomPassword=()=>require('node:crypto').randomBytes(24).toString('base64url');
   const firstPassword=randomPassword(),secondPassword=randomPassword(),viewPassword=randomPassword();
-  assert.throws(()=>c.bootstrap({...s.boot,setupCode:'attacker'}),/không đúng/);
+  assert.throws(()=>c.bootstrap({...s.boot,password:'attacker'}),/không đúng/);
   assert.equal(s.spreadsheets.get('testSpreadsheet12345')._tabs.size,0);
-  assert.equal(c.prepareBootstrap(s.boot).accepted,true);
   const a=c.bootstrap(s.boot),admin=a.token;
   assert.equal(s.props.has('SX_SETUP_HASH'),false);
   assert.throws(()=>c.bootstrap(s.boot),/trạng thái/);
-  const book=s.spreadsheets.get('testSpreadsheet12345');
+  const book=s.spreadsheets.get('generatedSpreadsheet12345');
   assert.deepEqual([...book._tabs.keys()],['Cau_hinh','Nguoi_dung','Xe','Giao_dich','Phan_cong','Nhat_ky']);
   const stored=JSON.stringify([...book._tabs.values()].map(tab=>tab.data));
-  assert(stored.includes('Test Organization'));assert(!stored.includes(s.boot.password));
+  assert(stored.includes('Sổ Xe Tổ Chức'));assert(!stored.includes(s.boot.password));
   const create=(username,role)=>s.invoke(admin,'createUser',{username,role,name:username});
   create('driver.one','driver');create('driver.two','driver');create('view.only','viewer');
   assert.throws(()=>c.login({username:'driver.one',password:'wrong'}),/không đúng/);
@@ -59,7 +58,7 @@ test('Sheets account login, private attachments, roles and concurrent edits',()=
   assert.throws(()=>s.invoke(v,'saveTransaction',args(carA.id)),/chỉ xem/);
   assert.throws(()=>s.invoke(v,'renameOrganization',{name:'Hijacked'}),/chỉ xem/);
   assert.throws(()=>s.invoke(d1,'createUser',{username:'hacker',role:'admin',name:'Hacker'}),/Admin/);
-  assert.throws(()=>s.invoke(d1,'changeSpreadsheet',{sheetUrl:s.boot.sheetUrl}),/Admin/);
+  assert.throws(()=>s.invoke(d1,'changeSpreadsheet',{sheetUrl:'https://docs.google.com/spreadsheets/d/testSpreadsheet12345/edit'}),/Admin/);
   assert.throws(()=>s.invoke(admin,'deleteUser',{id:user1}),/Không xóa được/);
   const updated=s.invoke(d1,'saveTransaction',{...args(own.carId),id:own.id,version:own.version,attachments:[]}).data.transactions.find(t=>t.id===own.id);
   assert.equal(updated.attachments.length,0);
@@ -74,28 +73,27 @@ test('Sheets account login, private attachments, roles and concurrent edits',()=
   assert.throws(()=>s.invoke(admin+'x','read'),/không hợp lệ/);
   const before=s.props.get('SX_SHEET');s.invoke(admin,'changeSpreadsheet',{sheetUrl:'https://docs.google.com/spreadsheets/d/anotherSpreadsheet12345/edit'});
   assert.notEqual(s.props.get('SX_SHEET'),before);assert.equal(s.props.get('SX_SHEET'),'anotherSpreadsheet12345');
-  const backup=s.invoke(admin,'export').backup;assert.equal(c.open_(backup).name,'Test Organization');
+  const backup=s.invoke(admin,'export').backup;assert.equal(c.open_(backup).name,'Sổ Xe Tổ Chức');
   s.invoke(admin,'deleteCar',{id:carA.id,version:carA.version,confirmation:carA.plate});
   assert.equal(s.invoke(admin,'read').data.transactions.length,1);
   assert.throws(()=>s.invoke(admin,'deleteOrganization',{confirmation:'wrong',password:s.boot.password}),/không đúng/);
   const activeSheetFile=s.files.get('anotherSpreadsheet12345'),attachmentFolder=s.folders.get(s.props.get('SX_FILES_FOLDER'));
-  s.invoke(admin,'deleteOrganization',{confirmation:'Test Organization',password:s.boot.password});
+  s.invoke(admin,'deleteOrganization',{confirmation:'Sổ Xe Tổ Chức',password:s.boot.password});
   assert.equal(activeSheetFile.trashed,true);assert.equal(attachmentFolder.trashed,true);
   assert.throws(()=>s.invoke(admin,'read'),/đã bị xóa/);
   assert.equal(s.locked,false);assert(s.acquisitions>30);
 });
-test('failed logins are throttled and bootstrap rejects a non-empty app workbook',()=>{
+test('failed logins are throttled and bootstrap can only run once',()=>{
   const s=service();const c=s.context;c.bootstrap(s.boot);
   for(let i=0;i<5;i++)assert.throws(()=>c.login({username:'admin',password:'wrong'}),/không đúng/);
   assert.throws(()=>c.login({username:'admin',password:s.boot.password}),/15 phút/);
-  const fresh=service(),book=fresh.spreadsheets.get('testSpreadsheet12345'),tab=book.insertSheet('Cau_hinh');
-  tab.getRange(1,1,1,2).setValues([['key','value']]);
-  assert.throws(()=>fresh.context.bootstrap(fresh.boot),/đã có dữ liệu/);
+  const fresh=service();fresh.context.bootstrap(fresh.boot);
+  assert.throws(()=>fresh.context.bootstrap(fresh.boot),/trạng thái/);
 });
 test('server helpers cannot be called through google.script.run and browser stores no identity',()=>{
   const code=fs.readFileSync('apps-script/Code.gs','utf8');
   const publicFunctions=[...code.matchAll(/^function (\w+)\(/gm)].map(x=>x[1]).filter(x=>!x.endsWith('_'));
-  assert.deepEqual(publicFunctions.sort(),['api','bootstrap','doGet','health','login','prepareBootstrap']);
+  assert.deepEqual(publicFunctions.sort(),['api','bootstrap','doGet','health','login']);
   const html=fs.readFileSync('apps-script/Index.html','utf8');
   assert(!/localStorage|sessionStorage|indexedDB/.test(html));assert(!html.includes('ScriptApp.getOAuthToken'));
 });

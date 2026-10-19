@@ -24,32 +24,25 @@ function doGet() {
 function initializeDeployment_() {
   const p = PropertiesService.getScriptProperties();
   if (p.getProperty('SX_KEY')) throw new Error('Dịch vụ đã khởi tạo. Không tạo lại khóa.');
-  const key = random_(32), setup = b64_(random_(24));
-  p.setProperties({SX_KEY:b64_(key), SX_SETUP_HASH:hash_(setup), SX_STATE:'new'});
-  console.log('Mã thiết lập một lần (giữ riêng): ' + setup);
+  p.setProperties({SX_KEY:b64_(random_(32)), SX_STATE:'new'});
 }
 function health() {
   const p = PropertiesService.getScriptProperties();
-  return {version:'2.1.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
-}
-function prepareBootstrap(request) {
-  return locked_(function(){validateSetup_(request);if(request.sheetUrl)spreadsheet_(request.sheetUrl);return {accepted:true};});
-}
-function validateSetup_(request){
-  const p=props_();if(p.getProperty('SX_STATE')!=='new')throw new Error('Dịch vụ không ở trạng thái tạo tổ chức.');
-  limited_('bootstrap');
-  if(!equal_(hash_(string_(request.setupCode,120)),p.getProperty('SX_SETUP_HASH'))||request.initialPassword!=='123456'){
-    failed_('bootstrap');throw new Error('Mã thiết lập hoặc mật khẩu Admin ban đầu không đúng.');
-  }
+  return {version:'2.2.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
 }
 function bootstrap(request) {
   return locked_(function () {
-    validateSetup_(request);
-    const p = props_(), spreadsheet = spreadsheet_(request.sheetUrl);
+    const p=props_();if(p.getProperty('SX_STATE')!=='new')throw new Error('Dịch vụ không ở trạng thái tạo tổ chức.');
+    limited_('bootstrap');
+    const username=String(request&&request.username||'').trim().toLowerCase(),password=String(request&&request.password||'');
+    if(username!=='admin'||password!=='123789'){
+      failed_('bootstrap');throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
+    }
+    CacheService.getScriptCache().remove('failure:bootstrap');
+    const spreadsheet = SpreadsheetApp.create('Sổ Xe Tổ Chức V2 - Dữ liệu');
     ensureWorkbookAvailable_(spreadsheet);
-    strongPassword_(request.password);
-    const user = {id:uuid_(),username:'admin',name:string_(request.adminName,80),role:'admin',password:password_(request.password),mustChange:false,sessionVersion:1};
-    const db = {format:SX_FORMAT_,id:uuid_(),name:string_(request.organizationName,120),revision:1,users:[user],cars:[],transactions:[],assignments:[],audit:[],createdAt:now_()};
+    const user = {id:uuid_(),username:'admin',name:'Quản trị viên',role:'admin',password:password_(password),mustChange:false,sessionVersion:1};
+    const db = {format:SX_FORMAT_,id:uuid_(),name:'Sổ Xe Tổ Chức',revision:1,users:[user],cars:[],transactions:[],assignments:[],audit:[],createdAt:now_()};
     audit_(db,user,'createOrganization',db.id);
     const filesFolder = DriveApp.createFolder('So Xe To Chuc - Tep dinh kem - '+db.id);
     p.setProperties({SX_SHEET:spreadsheet.getId(),SX_FILES_FOLDER:filesFolder.getId(),SX_ORG:db.id,SX_STATE:'ready'});
@@ -197,7 +190,7 @@ function version_(x,v){if(x&&x.version!==v)throw new Error('Dữ liệu đã đ�
 function audit_(db,u,action,target){db.audit.push({id:uuid_(),actor:u.id,action,target,at:now_()});}
 function string_(x,max,empty){if(typeof x!=='string'||x.length>max||(!empty&&!x.trim()))throw new Error('Thông tin nhập thiếu hoặc quá dài.');return x.trim();}
 function number_(x,min,max){if(typeof x!=='number'||!Number.isFinite(x)||x<min||x>max)throw new Error('Giá trị số không hợp lệ.');return x;}
-function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['11223344','123456','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
+function strongPassword_(x){if(typeof x!=='string'||x.length<8||x.length>128||['11223344','123456','123789','12345678'].includes(x))throw new Error('Mật khẩu phải từ 8 đến 128 ký tự và khác mật khẩu mặc định.');}
 function spreadsheet_(url){const m=String(url||'').match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/);if(!m)throw new Error('Link Google Sheet không hợp lệ.');return SpreadsheetApp.openById(m[1]);}
 function ensureWorkbookAvailable_(spreadsheet){
   const marker=spreadsheet.getSheetByName('Cau_hinh');

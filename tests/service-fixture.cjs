@@ -42,12 +42,11 @@ function service(){
     Utilities:{getUuid:()=>crypto.randomUUID(),base64Encode:b=>Buffer.from(b).toString('base64'),base64Decode:s=>[...Buffer.from(s,'base64')],newBlob:(v,type,name)=>{const b=typeof v==='string'?Buffer.from(v):Buffer.from(v);return {bytes:b,type,name:name||'',getBytes:()=>[...b],getDataAsString:()=>b.toString('utf8')}}},
     LockService:{getScriptLock:()=>({tryLock(){assert.equal(locked,false);locked=true;acquisitions++;return true},releaseLock(){locked=false}})},
     DriveApp:{createFolder:()=>makeFolder(crypto.randomUUID()),getFolderById:id=>{if(!folders.has(id))throw new Error('No folder access');return folders.get(id)},getFileById:id=>{if(!files.has(id))throw new Error('No file');return files.get(id)}},
-    SpreadsheetApp:{openById:id=>{if(!spreadsheets.has(id))throw new Error('No spreadsheet access');return spreadsheets.get(id)},flush(){}},
+    SpreadsheetApp:{create:()=>makeSpreadsheet('generatedSpreadsheet12345'),openById:id=>{if(!spreadsheets.has(id))throw new Error('No spreadsheet access');return spreadsheets.get(id)},flush(){}},
     ScriptApp:{getService:()=>({getUrl:()=> 'https://script.google.com/macros/s/test/exec'})},MimeType:{PLAIN_TEXT:'text/plain'},HtmlService:{XFrameOptionsMode:{ALLOWALL:'ALLOWALL'}}};
   vm.createContext(context);vm.runInContext(fs.readFileSync('apps-script/Code.gs','utf8'),context);
   context.initializeDeployment_();
-  const setup=crypto.randomBytes(24).toString('base64url');properties.setProperty('SX_SETUP_HASH',context.hash_(setup));
-  const boot={setupCode:setup,initialPassword:'123456',sheetUrl:'https://docs.google.com/spreadsheets/d/'+sheetId+'/edit',password:crypto.randomBytes(24).toString('base64url'),adminName:'Admin Tu',organizationName:'Test Organization'};
+  const boot={username:'admin',password:'123789'};
   const invoke=(token,action,args={})=>context.api({token,action,args});
   return {context,props,cache,files,folders,spreadsheets,boot,invoke,get locked(){return locked},get acquisitions(){return acquisitions}};
 }
