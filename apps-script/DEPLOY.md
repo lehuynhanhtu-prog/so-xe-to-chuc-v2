@@ -1,6 +1,6 @@
 # Triển khai Sổ Xe Tổ Chức với Google Sheets
 
-Bản 2.2 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend/giao diện. Apps Script chạy bằng tài khoản của chủ dữ liệu; người sử dụng (NSD) chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không cần tài khoản Google và không được chia sẻ Google Sheet.
+Bản 2.4 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend/giao diện. Apps Script chạy bằng tài khoản của chủ dữ liệu; người sử dụng (NSD) chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không cần tài khoản Google và không được chia sẻ Google Sheet.
 
 ## Kiến trúc
 
@@ -46,7 +46,9 @@ Mỗi NSD chỉ nhập tên đăng nhập và mật khẩu ứng dụng. Backend
 
 - **Admin:** quản lý toàn bộ tổ chức, xe, tài khoản, phân công và giao dịch.
 - **Admin chỉ xem:** xem toàn bộ dữ liệu, không sửa/xóa và không xem link Sheet.
-- **Người quản lý/lái xe:** xem xe được phân công và dữ liệu được phép; chỉ sửa/xóa giao dịch do mình nhập.
+- **Người quản lý/lái xe:** xem giao dịch do chính mình nhập; chỉ thêm/sửa/xóa giao dịch khi đang quản lý xe đó. Sau khi bàn giao, xe cũ vẫn hiện mờ và giao dịch cũ chỉ còn quyền xem; khi được giao lại, quyền sửa/xóa được phục hồi.
+
+Màn hình **Xe** chỉ hiển thị cảnh báo cho xe NSD đang quản lý và cho biết người quản lý, lần bàn giao/phân công gần nhất. Báo cáo **Thời gian quản lý xe** in đậm các giai đoạn đang hoạt động. Ngày trên giao diện dùng định dạng `dd/mm/yyyy`.
 
 Mọi thao tác ghi được khóa bằng `LockService`; trường `version` chặn ghi đè bản ghi đã bị người khác sửa.
 

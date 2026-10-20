@@ -2,6 +2,33 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const {service}=require('./service-fixture.cjs');
+test('existing pre-2.3 Sheets can log in without rewriting or shifting records',()=>{
+  const s=service(),c=s.context,admin=c.bootstrap(s.boot).token;
+  const attachment={name:'proof.txt',type:'text/plain',base64:Buffer.from('proof').toString('base64')};
+  const car=s.invoke(admin,'saveCar',{plate:'51A-12345',name:'Xe cũ',odo:2500,attachments:[attachment]}).data.cars[0];
+  s.invoke(admin,'saveTransaction',{carId:car.id,date:'2026-10-01',category:'fuel',amount:200000,odo:2600,note:'Ghi chú cũ',attachments:[attachment]});
+  const book=s.spreadsheets.get(s.props.get('SX_SHEET'));
+  const oldHeaders={Xe:['id','plate','name','odo','version','attachments'],Giao_dich:['id','carId','date','category','amount','odo','note','enteredBy','enteredFor','createdAt','updatedAt','version','attachments']};
+  for(const [name,headers] of Object.entries(oldHeaders)){
+    const tab=book._tabs.get(name),current=tab.data[0];
+    tab.data=[headers,...tab.data.slice(1).map(row=>headers.map(key=>row[current.indexOf(key)]))];
+  }
+  const before=JSON.stringify([...book._tabs.values()].map(t=>t.data));
+  const data=c.login(s.boot).data;
+  assert.equal(data.cars[0].id,car.id);assert.equal(data.cars[0].odo,2500);
+  assert.equal(data.cars[0].year,'');assert.equal(data.cars[0].powerType,'fuel');
+  assert.equal(data.cars[0].attachments[0].name,'proof.txt');
+  assert.equal(data.transactions[0].note,'Ghi chú cũ');assert.equal(data.transactions[0].amount,200000);
+  assert.equal(data.transactions[0].description,'');assert.equal(data.transactions[0].fuelPrice,0);
+  assert.equal(JSON.stringify([...book._tabs.values()].map(t=>t.data)),before);
+  const upgraded=s.invoke(admin,'renameOrganization',{name:'Tổ chức cũ'}).data;
+  assert.equal(upgraded.transactions[0].note,'Ghi chú cũ');
+  assert.equal(book._tabs.get('Xe').data[0][4],'powerType');
+  assert.equal(book._tabs.get('Giao_dich').data[0][6],'description');
+  assert.equal(s.invoke(admin,'attachment',{carId:car.id,id:car.attachments[0].id}).file.base64,attachment.base64);
+  book._tabs.get('Xe').data[0][3]='unknownColumn';
+  assert.throws(()=>c.login(s.boot),/Cấu trúc bảng Xe/);
+});
 test('Sheets account login, private attachments, roles and concurrent edits',()=>{
   const s=service(),c=s.context;
   const randomPassword=()=>require('node:crypto').randomBytes(24).toString('base64url');
@@ -42,19 +69,30 @@ test('Sheets account login, private attachments, roles and concurrent edits',()=
   s.invoke(admin,'assign',{carId:carA.id,userId:user1});
   assert.equal(c.login({username:'driver.one',password:firstPassword}).data.me.mustChange,false);
   const args=carId=>({carId,date:'2026-10-01',category:'fuel',amount:100000,odo:500,note:'test',attachments:[attach]});
-  s.invoke(d1,'saveTransaction',args(carB.id)); // on behalf
-  s.invoke(d2,'saveTransaction',args(carA.id));
+  assert.throws(()=>s.invoke(d1,'saveTransaction',args(carB.id)),/xe đang quản lý/);
+  assert.throws(()=>s.invoke(d2,'saveTransaction',args(carA.id)),/xe đang quản lý/);
+  s.invoke(d1,'saveTransaction',args(carA.id));
+  s.invoke(d2,'saveTransaction',args(carB.id));
   s.invoke(admin,'saveTransaction',args(carB.id)); // hidden from driver 1
   const aData=s.invoke(admin,'read').data;
   const dData=s.invoke(d1,'read').data;
-  assert.equal(aData.transactions.length,3);assert.equal(dData.transactions.length,2);
+  assert.equal(aData.transactions.length,3);assert.equal(dData.transactions.length,1);
   assert.equal(dData.organization.sheetUrl,undefined);assert.equal(s.invoke(v,'read').data.organization.sheetUrl,undefined);
   assert(!JSON.stringify(dData).includes('base64'));
-  const own=dData.transactions.find(t=>t.enteredBy===user1),other=dData.transactions.find(t=>t.enteredBy!==user1),hidden=aData.transactions.find(t=>!dData.transactions.some(x=>x.id===t.id));
-  assert.throws(()=>s.invoke(d1,'saveTransaction',{...other,...args(other.carId)}),/mình nhập/);
-  assert.throws(()=>s.invoke(d1,'deleteTransaction',{id:other.id,version:other.version}),/mình nhập/);
+  const own=dData.transactions[0],other=aData.transactions.find(t=>t.enteredBy===user2),hidden=aData.transactions.find(t=>!dData.transactions.some(x=>x.id===t.id)&&t.attachments.length);
+  assert.throws(()=>s.invoke(d1,'saveTransaction',{...other,...args(other.carId)}),/mình đã nhập/);
+  assert.throws(()=>s.invoke(d1,'deleteTransaction',{id:other.id,version:other.version}),/mình đã nhập/);
   assert.throws(()=>s.invoke(d1,'attachment',{transactionId:hidden.id,id:hidden.attachments[0].id}),/quyền/);
   assert.equal(s.invoke(d1,'attachment',{transactionId:own.id,id:own.attachments[0].id}).file.base64,attach.base64);
+  s.invoke(admin,'assign',{carId:carA.id,userId:user2});
+  const afterHandover=s.invoke(d1,'read').data;
+  assert.equal(afterHandover.transactions.length,1);
+  assert.equal(afterHandover.carStatus.find(x=>x.carId===carA.id).managedByMe,false);
+  assert.equal(afterHandover.reminderTransactions.length,0);
+  assert.throws(()=>s.invoke(d1,'saveTransaction',{...args(own.carId),id:own.id,version:own.version}),/còn quản lý/);
+  assert.throws(()=>s.invoke(d1,'deleteTransaction',{id:own.id,version:own.version}),/còn quản lý/);
+  s.invoke(admin,'assign',{carId:carA.id,userId:user1});
+  assert.equal(s.invoke(d1,'read').data.carStatus.find(x=>x.carId===carA.id).managedByMe,true);
   assert.throws(()=>s.invoke(v,'saveTransaction',args(carA.id)),/chỉ xem/);
   assert.throws(()=>s.invoke(v,'renameOrganization',{name:'Hijacked'}),/chỉ xem/);
   assert.throws(()=>s.invoke(d1,'createUser',{username:'hacker',role:'admin',name:'Hacker'}),/Admin/);
@@ -75,7 +113,7 @@ test('Sheets account login, private attachments, roles and concurrent edits',()=
   assert.notEqual(s.props.get('SX_SHEET'),before);assert.equal(s.props.get('SX_SHEET'),'anotherSpreadsheet12345');
   const backup=s.invoke(admin,'export').backup;assert.equal(c.open_(backup).name,'Sổ Xe Tổ Chức');
   s.invoke(admin,'deleteCar',{id:carA.id,version:carA.version,confirmation:carA.plate});
-  assert.equal(s.invoke(admin,'read').data.transactions.length,1);
+  assert.equal(s.invoke(admin,'read').data.transactions.length,2);
   assert.throws(()=>s.invoke(admin,'deleteOrganization',{confirmation:'wrong',password:s.boot.password}),/không đúng/);
   const activeSheetFile=s.files.get('anotherSpreadsheet12345'),attachmentFolder=s.folders.get(s.props.get('SX_FILES_FOLDER'));
   s.invoke(admin,'deleteOrganization',{confirmation:'Sổ Xe Tổ Chức',password:s.boot.password});

@@ -8,11 +8,11 @@
 
 ## Trạng thái triển khai
 
-Bản Web 2.1 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend. Apps Script chạy dưới quyền tài khoản chủ Sheet; NSD chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không thực hiện Google OAuth và không cần được chia sẻ Sheet/Drive.
+Bản Web 2.4 dùng Google Sheets làm cơ sở dữ liệu và Google Apps Script làm backend. Apps Script chạy dưới quyền tài khoản chủ Sheet; NSD chỉ đăng nhập bằng tài khoản nội bộ do Admin cấp, không thực hiện Google OAuth và không cần được chia sẻ Sheet/Drive.
 
 - Các bảng dữ liệu: `Cau_hinh`, `Nguoi_dung`, `Xe`, `Giao_dich`, `Phan_cong`, `Nhat_ky`.
 - Tệp đính kèm nằm trong thư mục Drive riêng tư do backend tạo; Sheet chỉ lưu metadata.
-- NSD chỉ nhập tên tài khoản và mật khẩu; backend tự đọc bảng `Nguoi_dung`. Không chia sẻ link Sheet, không cần file đăng nhập và không cần đăng nhập Google.
+- NSD chỉ nhập tên tài khoản và mật khẩu; backend tự đọc bảng `Nguoi_dung`. NSD chỉ sửa/xóa giao dịch mình nhập khi còn quản lý xe; sau bàn giao chỉ xem lại giao dịch cũ và quyền được phục hồi khi nhận lại xe.
 - GitHub Pages là địa chỉ truy cập ổn định và mở Web App Apps Script đã cấu hình.
 - Hướng dẫn triển khai backend: [`apps-script/DEPLOY.md`](apps-script/DEPLOY.md).
 
