@@ -28,7 +28,7 @@ function initializeDeployment_() {
 }
 function health() {
   const p = PropertiesService.getScriptProperties();
-  return {version:'2.3.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
+  return {version:'2.4.0',storage:'google-sheets',ready:!!p.getProperty('SX_KEY'), initialized:p.getProperty('SX_STATE')==='ready', deleted:p.getProperty('SX_STATE')==='deleted'};
 }
 function bootstrap(request) {
   return locked_(function () {
@@ -137,10 +137,12 @@ function api(request) {
       }
       case 'saveTransaction': {
         const existing=a.id?transaction_(db,a.id):null;
-        if(existing&&!canEdit_(u,existing))throw new Error('Chỉ được sửa giao dịch do mình nhập.');
+        if(existing&&!canEdit_(db,u,existing))throw new Error('Chỉ được sửa giao dịch do mình nhập khi còn quản lý xe.');
         version_(existing,a.version);const selectedCar=car_(db,a.carId);
-        if(u.role==='driver'&&existing&&a.carId!==existing.carId)throw new Error('Không được chuyển giao dịch sang xe khác.');
-        // Drivers can enter on behalf for any car, but do not receive other records for that car.
+        if(u.role==='driver'){
+          if(existing&&a.carId!==existing.carId)throw new Error('Không được chuyển giao dịch sang xe khác.');
+          if(!isCurrentManager_(db,u.id,a.carId))throw new Error('Chỉ được thêm hoặc sửa giao dịch khi đang quản lý xe.');
+        }
         const enteredFor=a.enteredFor||assigned_(db,a.carId)||u.id;user_(db,enteredFor);
         if(!['fuel','charge','battery_rental','maintenance','parts','insurance','inspection','road_fee','other'].includes(a.category))throw new Error('Loại chi phí không hợp lệ.');
         if(selectedCar.powerType==='electric'&&a.category==='fuel')throw new Error('Xe điện không có chi phí đổ xăng.');
@@ -155,7 +157,7 @@ function api(request) {
         if(existing)db.transactions[db.transactions.indexOf(existing)]=next;else db.transactions.push(next);break;
       }
       case 'deleteTransaction': {
-        const t=transaction_(db,a.id);if(!canEdit_(u,t))throw new Error('Chỉ được xóa giao dịch do mình nhập.');version_(t,a.version);
+        const t=transaction_(db,a.id);if(!canEdit_(db,u,t))throw new Error('Chỉ được xóa giao dịch do mình nhập khi còn quản lý xe.');version_(t,a.version);
         db.transactions=db.transactions.filter(x=>x.id!==t.id);break;
       }
       default:throw new Error('Thao tác không được hỗ trợ.');
@@ -182,7 +184,7 @@ function view_(db,u){
   const assignedUserId=carId=>assigned_(db,carId),reminder=transaction=>({id:transaction.id,carId:transaction.carId,date:transaction.date,category:transaction.category,odo:transaction.odo,description:transaction.description||'',repeatKm:transaction.repeatKm||0,repeatMonths:transaction.repeatMonths||0,insuranceProvider:transaction.insuranceProvider||'',insurancePolicy:transaction.insurancePolicy||'',insuranceStart:transaction.insuranceStart||'',insuranceExpiry:transaction.insuranceExpiry||'',updatedAt:transaction.updatedAt||''});
   const result={organization:{id:db.id,name:db.name},me:{id:u.id,username:u.username,name:u.name,role:u.role,mustChange:false},revision:db.revision,
     users:db.users.filter(x=>!x.deletedAt).map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,mustChange:x.mustChange})),
-    cars:db.cars.filter(x=>full||visibleCar_(db,u,x.id)).map(strip),
+    cars:db.cars.filter(x=>full||visibleCar_(db,u,x.id)).map(car=>Object.assign(strip(car),{assignedUserId:assignedUserId(car.id),isManagedByMe:assignedUserId(car.id)===u.id,latestHandover:latestHandover_(db,car.id,u)})),
     carChoices:db.cars.map(x=>({id:x.id,plate:x.plate,name:x.name,powerType:x.powerType||'fuel',assignedUserId:assignedUserId(x.id)})),transactions:visible.map(strip),assignments:db.assignments.filter(x=>full||x.userId===u.id)};
   if(u.role==='driver'){
     result.reminderTransactions=db.transactions.filter(x=>assignedUserId(x.carId)===u.id&&isReminder_(x)).map(reminder);
@@ -192,9 +194,11 @@ function view_(db,u){
   return result;
 }
 function assigned_(db,carId){const a=db.assignments.find(x=>x.carId===carId&&!x.endedAt);return a?a.userId:null;}
-function canView_(db,u,t){return u.role!=='driver'||t.enteredBy===u.id||assigned_(db,t.carId)===u.id;}
-function canEdit_(u,t){return u.role==='admin'||u.role==='driver'&&t.enteredBy===u.id;}
-function visibleCar_(db,u,id){return u.role!=='driver'||assigned_(db,id)===u.id||db.transactions.some(x=>x.carId===id&&x.enteredBy===u.id);}
+function isCurrentManager_(db,userId,carId){return assigned_(db,carId)===userId;}
+function latestHandover_(db,carId,u){const rows=db.assignments.filter(x=>x.carId===carId).slice().sort((a,b)=>String(b.startedAt||'').localeCompare(String(a.startedAt||'')));const latest=rows[0];if(!latest)return null;return {userId:latest.userId,startedAt:latest.startedAt,endedAt:latest.endedAt||'',assignedBy:latest.assignedBy||'',isCurrent:!latest.endedAt,visibleToDriver:u.role!=='driver'||latest.userId===u.id||db.transactions.some(t=>t.carId===carId&&t.enteredBy===u.id)};}
+function canView_(db,u,t){return u.role!=='driver'||t.enteredBy===u.id||isCurrentManager_(db,u.id,t.carId);}
+function canEdit_(db,u,t){return u.role==='admin'||u.role==='driver'&&t.enteredBy===u.id&&isCurrentManager_(db,u.id,t.carId);}
+function visibleCar_(db,u,id){return u.role!=='driver'||isCurrentManager_(db,u.id,id)||db.transactions.some(x=>x.carId===id&&x.enteredBy===u.id);}
 function admin_(u){if(u.role!=='admin')throw new Error('Chỉ Admin có quyền thực hiện thao tác này.');}
 function user_(db,id){const x=db.users.find(x=>x.id===id&&!x.deletedAt);if(!x)throw new Error('Tài khoản không tồn tại.');return x;}
 function car_(db,id){const x=db.cars.find(x=>x.id===id);if(!x)throw new Error('Xe không tồn tại.');return x;}
